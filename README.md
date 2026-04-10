@@ -32,6 +32,19 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 
 本代理自动解决这些问题：对外暴露单一模型名 `modelscope-auto`，内部自动从可用模型列表中选取最优模型，遇到故障自动切换，全程无感。
 
+### 管理后台预览
+
+<div align="center">
+<img src="docs/admin-dashboard.png" width="700" alt="管理后台 - 仪表盘"/>
+<p><em>仪表盘：模型数量、运行状态、当前模型一目了然</em></p>
+
+<img src="docs/admin-logs.png" width="700" alt="管理后台 - 请求日志"/>
+<p><em>请求日志：实时查看请求详情，按级别过滤和关键词搜索</em></p>
+
+<img src="docs/admin-config.png" width="700" alt="管理后台 - 实时配置"/>
+<p><em>实时配置：在线修改参数，即时生效并持久化</em></p>
+</div>
+
 ### 核心特性
 
 **智能模型管理**
@@ -61,7 +74,7 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/YOUR_USERNAME/modelscope-auto-proxy.git
+git clone https://github.com/a546284907/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
 # 2. 安装依赖
@@ -237,7 +250,7 @@ With just a free ModelScope account, you can use top-tier models like Qwen3-Code
 ### Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/modelscope-auto-proxy.git
+git clone https://github.com/a546284907/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 pip install -r requirements.txt
 cp .env.example .env
