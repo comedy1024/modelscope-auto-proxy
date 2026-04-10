@@ -75,9 +75,11 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 ```bash
 # 1. 克隆项目
 git clone https://github.com/comedy1024/modelscope-auto-proxy.git
+# 如果 GitHub 无法访问，使用镜像加速：
+# git clone https://gh.llkk.cc/https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
-# 2. 安装依赖
+# 2. 安装依赖（国内服务器推荐使用镜像源：pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt）
 pip install -r requirements.txt
 
 # 3. 配置 API Key
@@ -180,11 +182,13 @@ curl http://localhost:8000/v1/chat/completions \
 
 ### Docker 部署（推荐）
 
-**一键部署（使用 docker compose）：**
+**一键部署：**
 
 ```bash
-# 1. 克隆项目
+# 1. 克隆项目（国内服务器推荐使用镜像加速）
 git clone https://github.com/comedy1024/modelscope-auto-proxy.git
+# 如果 GitHub 无法访问，使用镜像加速：
+# git clone https://gh.llkk.cc/https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
 # 2. 配置 API Key
@@ -193,8 +197,8 @@ cp .env.example .env
 # 获取地址: https://www.modelscope.cn/my/myaccesstoken
 vi .env
 
-# 3. 构建并启动
-docker compose up -d --build
+# 3. 构建并启动（Docker 已内置 pip 阿里云镜像源，国内服务器也能正常构建）
+docker-compose up -d --build
 
 # 4. 验证服务
 curl http://localhost:8000/v1/status
@@ -204,6 +208,8 @@ curl http://localhost:8000/v1/status
 
 ```bash
 git clone https://github.com/comedy1024/modelscope-auto-proxy.git
+# 或使用镜像加速：
+# git clone https://gh.llkk.cc/https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
 # 构建镜像
@@ -220,7 +226,7 @@ docker run -d \
   modelscope-auto-proxy
 ```
 
-> 注意：必须先克隆项目再构建，因为 Dockerfile 和源码都在仓库中。
+> 注意：必须先克隆项目再构建，因为 Dockerfile 和源码都在仓库中。Dockerfile 已配置阿里云 pip 镜像源，国内服务器无需额外配置。
 
 ### 宝塔面板 Docker 部署
 
@@ -236,8 +242,8 @@ docker run -d \
 # 进入宝塔终端
 cd /opt
 
-# 克隆项目
-git clone https://github.com/comedy1024/modelscope-auto-proxy.git
+# 克隆项目（国内服务器推荐使用镜像加速）
+git clone https://gh.llkk.cc/https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
 # 配置 API Key
@@ -251,7 +257,7 @@ vi .env
 
 ```bash
 cd /opt/modelscope-auto-proxy
-docker compose up -d --build
+docker-compose up -d --build
 ```
 
 **第四步：验证服务**
@@ -283,7 +289,7 @@ docker logs -f modelscope-proxy
 ```bash
 cd /opt/modelscope-auto-proxy
 git pull
-docker compose up -d --build
+docker-compose up -d --build
 ```
 
 ### 作为系统服务运行
@@ -381,13 +387,13 @@ cp .env.example .env
 # Edit .env with your ModelScope API Key from https://www.modelscope.cn/my/myaccesstoken
 
 # 3. Build and start
-docker compose up -d --build
+docker-compose up -d --build
 
 # 4. Verify
 curl http://localhost:8000/v1/status
 ```
 
-> Note: You must clone the project first before building, as the Dockerfile and source code are in the repository.
+> Note: You must clone the project first before building, as the Dockerfile and source code are in the repository. The Dockerfile uses Aliyun pip mirror for China servers.
 
 ### Disclaimer
 
