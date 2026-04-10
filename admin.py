@@ -378,6 +378,7 @@ async def get_config(username: str = Depends(require_auth)):
         "min_param_b": settings.min_param_b,
         "model_refresh_interval": settings.model_refresh_interval,
         "log_level": settings.log_level,
+        "log_retention_days": settings.log_retention_days,
         "api_key_set": bool(settings.modelscope_api_key),
         "api_key_preview": f"****{settings.modelscope_api_key[-4:]}" if len(settings.modelscope_api_key) >= 8 else "****",
         "admin_username": settings.admin_username,
@@ -393,6 +394,7 @@ async def update_config(config: dict, username: str = Depends(require_auth)):
         "log_level": str,
         "virtual_model_name": str,
         "modelscope_api_key": str,
+        "log_retention_days": int,
     }
 
     updated = {}
@@ -409,6 +411,13 @@ async def update_config(config: dict, username: str = Depends(require_auth)):
                             content={"error": "API Key 格式无效，需以 ms- 开头"},
                             status_code=400,
                         )
+
+                # log_retention_days 必须 >= 0
+                if field == "log_retention_days" and new_value < 0:
+                    return JSONResponse(
+                        content={"error": "日志保留天数不能为负数，0 表示永不清空"},
+                        status_code=400,
+                    )
 
                 if new_value != old_value:
                     setattr(settings, field, new_value)
@@ -468,6 +477,7 @@ def _save_to_env(changes: dict):
         "virtual_model_name": "VIRTUAL_MODEL_NAME",
         "modelscope_api_key": "MODELSCOPE_API_KEY",
         "admin_password": "ADMIN_PASSWORD",
+        "log_retention_days": "LOG_RETENTION_DAYS",
     }
 
     for field, change in changes.items():

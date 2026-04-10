@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # 日志
     log_level: str = "INFO"
+    log_retention_days: int = 30  # 日志保留天数，0 表示永不清空
 
     # 管理后台认证
     admin_username: str = "admin"

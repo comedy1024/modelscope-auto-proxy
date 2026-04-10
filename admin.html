@@ -591,6 +591,11 @@ tr:hover td { background: var(--bg-hover); }
           <div class="form-hint">日志输出级别</div>
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">日志保留天数</label>
+        <input class="form-input" id="cfgLogRetention" type="number" min="0" placeholder="30" style="max-width:200px;">
+        <div class="form-hint">0 表示永不清空，超过天数的旧日志文件自动删除</div>
+      </div>
       <div style="margin-top:16px;">
         <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
         <span style="margin-left:12px;font-size:12px;color:var(--text-muted);">修改后自动保存到 .env 并即时生效</span>
@@ -904,6 +909,7 @@ async function loadConfig() {
     ['参数下限', data.min_param_b + 'B'],
     ['刷新间隔', _formatInterval(data.model_refresh_interval)],
     ['日志级别', data.log_level],
+    ['日志保留', data.log_retention_days === 0 ? '永不清空' : data.log_retention_days + ' 天'],
     ['API Key', data.api_key_preview],
   ].map(([k, v]) =>
     `<div class="config-item">
@@ -919,12 +925,14 @@ async function loadConfig() {
   document.getElementById('cfgMinParamB').value = data.min_param_b;
   document.getElementById('cfgRefreshInterval').value = data.model_refresh_interval;
   document.getElementById('cfgLogLevel').value = data.log_level;
+  document.getElementById('cfgLogRetention').value = data.log_retention_days;
 
   // API 示例
   const host = window.location.host;
+  const proto = window.location.protocol.replace(':', '');  // http 或 https
   document.getElementById('apiExample').textContent =
 `# 使用 OpenAI 兼容 API 调用
-# Base URL: http://${host}/v1
+# Base URL: ${proto}://${host}/v1
 # API Key: 你的 ModelScope API Key
 
 # Python 示例
@@ -932,7 +940,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="your-modelscope-api-key",
-    base_url="http://${host}/v1"
+    base_url="${proto}://${host}/v1"
 )
 
 response = client.chat.completions.create(
@@ -942,7 +950,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 
 # cURL 示例
-curl http://${host}/v1/chat/completions \\
+curl ${proto}://${host}/v1/chat/completions \\
   -H "Authorization: Bearer your-modelscope-api-key" \\
   -H "Content-Type: application/json" \\
   -d '{"model": "${data.virtual_model_name}", "messages": [{"role": "user", "content": "你好"}]}'`;
@@ -954,6 +962,7 @@ async function saveConfig() {
     min_param_b: parseInt(document.getElementById('cfgMinParamB').value),
     model_refresh_interval: parseInt(document.getElementById('cfgRefreshInterval').value),
     log_level: document.getElementById('cfgLogLevel').value,
+    log_retention_days: parseInt(document.getElementById('cfgLogRetention').value),
   };
 
   // API Key：只有在用户输入了新值时才提交

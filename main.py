@@ -31,22 +31,26 @@ def setup_logging():
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
 
+    # 根 logger — 先清除已有 handler，防止重复（uvicorn 等会自动添加 handler）
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+
     # 控制台
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
 
     # 文件日志（按天滚动）
     from logging.handlers import TimedRotatingFileHandler
+    # log_retention_days=0 表示永不清空，设置较大的 backupCount；否则按配置的天数
+    backup_count = 3650 if settings.log_retention_days == 0 else settings.log_retention_days
     file_handler = TimedRotatingFileHandler(
         filename=settings.log_dir / "modelscope-proxy.log",
         when="midnight",
-        backupCount=30,
+        backupCount=backup_count,
         encoding="utf-8",
     )
     file_handler.setFormatter(logging.Formatter(log_format, date_format))
 
-    # 根 logger
-    root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)

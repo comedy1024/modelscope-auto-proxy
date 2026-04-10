@@ -180,6 +180,7 @@ curl http://localhost:8000/v1/chat/completions \
 | `MIN_PARAM_B` | 4 | 模型参数量下限（B） |
 | `MODEL_REFRESH_INTERVAL` | 86400 | 模型列表刷新间隔（秒） |
 | `LOG_LEVEL` | INFO | 日志级别 |
+| `LOG_RETENTION_DAYS` | 30 | 日志保留天数（0 表示永不清空） |
 | `ADMIN_USERNAME` | admin | 管理后台用户名 |
 | `ADMIN_PASSWORD` | 自动生成 | 管理后台密码（为空时首次启动自动生成，见启动日志或 .env 文件） |
 
@@ -279,6 +280,8 @@ docker-compose up -d --build
 3. 站点设置 → 反向代理 → 添加反向代理
 4. 目标 URL 填 `http://127.0.0.1:8000`
 5. 启用缓存关闭，保存即可
+
+> **HTTPS 提示**：使用 HTTPS 反向代理时，客户端调用的 Base URL 应使用 `https://` 协议。例如：`https://your-domain.com/v1`。管理后台的 API 示例会自动检测当前协议。
 
 **查看日志**
 
@@ -380,6 +383,7 @@ Point your AI coding tool to `http://localhost:8000/v1` with model name `modelsc
 | `MIN_PARAM_B` | 4 | Minimum model parameter count in billions |
 | `MODEL_REFRESH_INTERVAL` | 86400 | Model list refresh interval in seconds |
 | `LOG_LEVEL` | INFO | Log level |
+| `LOG_RETENTION_DAYS` | 30 | Log retention days (0 = never clean up) |
 | `ADMIN_USERNAME` | admin | Admin dashboard username |
 | `ADMIN_PASSWORD` | auto-generated | Admin dashboard password (auto-generated on first start if empty; see logs or .env file) |
 
