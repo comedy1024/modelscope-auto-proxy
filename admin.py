@@ -341,6 +341,32 @@ async def download_log(filename: str, username: str = Depends(require_auth)):
     })
 
 
+# ── 密码修改 ──────────────────────────────────────────
+@router.post("/api/change-password")
+async def change_password(data: dict, username: str = Depends(require_auth)):
+    """修改管理后台密码（需要认证）"""
+    current_password = data.get("current_password", "")
+    new_password = data.get("new_password", "")
+
+    if not current_password or not new_password:
+        return JSONResponse(content={"error": "请填写当前密码和新密码"}, status_code=400)
+
+    if not secrets.compare_digest(current_password.encode(), settings.admin_password.encode()):
+        return JSONResponse(content={"error": "当前密码不正确"}, status_code=400)
+
+    if len(new_password) < 6:
+        return JSONResponse(content={"error": "新密码长度至少 6 位"}, status_code=400)
+
+    old_preview = f"****{settings.admin_password[-4:]}" if len(settings.admin_password) >= 8 else "****"
+    settings.admin_password = new_password
+
+    # 保存到 .env
+    _save_to_env({"admin_password": {"old": old_preview, "new": new_password}})
+
+    logger.info(f"管理员 {username} 修改了后台密码")
+    return JSONResponse(content={"message": "密码修改成功，下次登录请使用新密码"})
+
+
 # ── 配置管理 ──────────────────────────────────────────
 @router.get("/api/config")
 async def get_config(username: str = Depends(require_auth)):
@@ -441,6 +467,7 @@ def _save_to_env(changes: dict):
         "log_level": "LOG_LEVEL",
         "virtual_model_name": "VIRTUAL_MODEL_NAME",
         "modelscope_api_key": "MODELSCOPE_API_KEY",
+        "admin_password": "ADMIN_PASSWORD",
     }
 
     for field, change in changes.items():
