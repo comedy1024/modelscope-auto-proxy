@@ -373,16 +373,16 @@ a { color: var(--accent); text-decoration: none; }
 </div>
 
 <script>
-// Fetch live status
-fetch('/admin/api/status')
+// Fetch live status (use /v1/status which doesn't require auth)
+fetch('/v1/status')
   .then(r => r.json())
   .then(data => {
-    document.getElementById('statModels').textContent = data.model_stats.total;
-    document.getElementById('statActive').textContent = data.model_stats.active;
-    document.getElementById('statUptime').textContent = data.uptime;
+    document.getElementById('statModels').textContent = data.total;
+    document.getElementById('statActive').textContent = data.active;
+    document.getElementById('statUptime').textContent = '?';
     document.getElementById('statusText').textContent =
-      data.model_stats.active > 0
-        ? 'Running \u00B7 ' + data.model_stats.current_model?.split('/')?.pop?.() || 'OK'
+      data.active > 0
+        ? 'Running \u00B7 ' + (data.current_model?.split('/')?.pop?.() || 'OK')
         : 'No active models';
   })
   .catch(() => {

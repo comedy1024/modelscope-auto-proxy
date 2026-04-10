@@ -13,6 +13,8 @@ services:
       - MIN_PARAM_B=${MIN_PARAM_B:-4}
       - MODEL_REFRESH_INTERVAL=${MODEL_REFRESH_INTERVAL:-86400}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       - modelscope-data:/app/data
       - modelscope-logs:/app/logs

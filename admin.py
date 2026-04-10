@@ -4,22 +4,50 @@ Admin 后台路由 — 提供管理界面的 API 端点。
 - 模型管理（查看、启用/禁用、刷新）
 - 日志查看（实时、按文件）
 - 配置管理（查看、热更新）
+- Basic Auth 认证保护
 """
 import json
 import logging
 import os
+import secrets
+import hashlib
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from config import settings
 from model_manager import model_manager
 
 logger = logging.getLogger("admin")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# ── Basic Auth 认证 ──────────────────────────────────────
+security = HTTPBasic()
+
+
+def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    """验证管理后台的 Basic Auth 凭证"""
+    correct_username = secrets.compare_digest(
+        credentials.username.encode("utf8"),
+        settings.admin_username.encode("utf8"),
+    )
+    correct_password = secrets.compare_digest(
+        credentials.password.encode("utf8"),
+        settings.admin_password.encode("utf8"),
+    )
+    if not (correct_username and correct_password):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=401,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 
 # ── 前端页面 ──────────────────────────────────────────
 _ADMIN_HTML: Optional[str] = None
@@ -35,15 +63,15 @@ def _load_admin_html() -> str:
 
 
 @router.get("", response_class=HTMLResponse)
-async def admin_page():
-    """Admin 管理后台页面"""
+async def admin_page(username: str = Depends(verify_admin)):
+    """Admin 管理后台页面（需要认证）"""
     return HTMLResponse(content=_load_admin_html())
 
 
 # ── 系统状态 ──────────────────────────────────────────
 @router.get("/api/status")
-async def system_status():
-    """获取系统状态概览"""
+async def system_status(username: str = Depends(verify_admin)):
+    """获取系统状态概览（需要认证）"""
     status = model_manager.get_status()
     return JSONResponse(content={
         "service": "ModelScope API 转换器",
@@ -93,15 +121,15 @@ def _get_last_refresh_time() -> str:
 
 # ── 模型管理 ──────────────────────────────────────────
 @router.get("/api/models")
-async def list_models():
-    """获取模型列表（含状态）"""
+async def list_models(username: str = Depends(verify_admin)):
+    """获取模型列表（含状态，需要认证）"""
     status = model_manager.get_status()
     return JSONResponse(content=status)
 
 
 @router.post("/api/models/enable")
-async def enable_model(data: dict):
-    """手动启用一个被禁用的模型（POST body: {"model_id": "xxx"})"""
+async def enable_model(data: dict, username: str = Depends(verify_admin)):
+    """手动启用一个被禁用的模型（需要认证）"""
     model_id = data.get("model_id", "")
     if not model_id:
         return JSONResponse(content={"error": "model_id is required"}, status_code=400)
@@ -114,8 +142,8 @@ async def enable_model(data: dict):
 
 
 @router.post("/api/models/disable")
-async def disable_model(data: dict):
-    """手动禁用一个模型（POST body: {"model_id": "xxx"})"""
+async def disable_model(data: dict, username: str = Depends(verify_admin)):
+    """手动禁用一个模型（需要认证）"""
     model_id = data.get("model_id", "")
     if not model_id:
         return JSONResponse(content={"error": "model_id is required"}, status_code=400)
@@ -124,8 +152,8 @@ async def disable_model(data: dict):
 
 
 @router.post("/api/refresh")
-async def refresh_models():
-    """手动触发模型列表刷新"""
+async def refresh_models(username: str = Depends(verify_admin)):
+    """手动触发模型列表刷新（需要认证）"""
     model_manager.refresh_models()
     return JSONResponse(content={
         "message": "模型列表已刷新",
@@ -134,8 +162,8 @@ async def refresh_models():
 
 
 @router.post("/api/reset-disabled")
-async def reset_all_disabled():
-    """重置所有被禁用的模型"""
+async def reset_all_disabled(username: str = Depends(verify_admin)):
+    """重置所有被禁用的模型（需要认证）"""
     with model_manager._lock:
         count = len(model_manager._disabled)
         model_manager._disabled.clear()
@@ -150,8 +178,9 @@ async def get_logs(
     lines: int = Query(default=200, ge=1, le=2000),
     level: str = Query(default="ALL", description="过滤级别: ALL, DEBUG, INFO, WARNING, ERROR"),
     search: str = Query(default="", description="搜索关键词"),
+    username: str = Depends(verify_admin),
 ):
-    """获取日志内容"""
+    """获取日志内容（需要认证）"""
     log_file = settings.log_dir / "modelscope-proxy.log"
     if not log_file.exists():
         return JSONResponse(content={"logs": [], "total": 0, "file": str(log_file)})
@@ -183,8 +212,8 @@ async def get_logs(
 
 
 @router.get("/api/logs/files")
-async def list_log_files():
-    """列出所有日志文件"""
+async def list_log_files(username: str = Depends(verify_admin)):
+    """列出所有日志文件（需要认证）"""
     log_dir = settings.log_dir
     files = []
     if log_dir.exists():
@@ -198,8 +227,8 @@ async def list_log_files():
 
 
 @router.get("/api/logs/download/{filename}")
-async def download_log(filename: str):
-    """下载日志文件"""
+async def download_log(filename: str, username: str = Depends(verify_admin)):
+    """下载日志文件（需要认证）"""
     # 安全检查：防止路径遍历
     if ".." in filename or "/" in filename or "\\" in filename:
         return JSONResponse(content={"error": "非法文件名"}, status_code=400)
@@ -216,8 +245,8 @@ async def download_log(filename: str):
 
 # ── 配置管理 ──────────────────────────────────────────
 @router.get("/api/config")
-async def get_config():
-    """获取当前配置（隐藏敏感信息）"""
+async def get_config(username: str = Depends(verify_admin)):
+    """获取当前配置（隐藏敏感信息，需要认证）"""
     return JSONResponse(content={
         "modelscope_base_url": settings.modelscope_base_url,
         "proxy_port": settings.proxy_port,
@@ -227,12 +256,13 @@ async def get_config():
         "log_level": settings.log_level,
         "api_key_set": bool(settings.modelscope_api_key),
         "api_key_preview": f"****{settings.modelscope_api_key[-4:]}" if len(settings.modelscope_api_key) >= 8 else "****",
+        "admin_username": settings.admin_username,
     })
 
 
 @router.post("/api/config")
-async def update_config(config: dict):
-    """热更新配置（部分字段支持运行时修改）"""
+async def update_config(config: dict, username: str = Depends(verify_admin)):
+    """热更新配置（部分字段支持运行时修改，需要认证）"""
     updatable_fields = {
         "min_param_b": int,
         "model_refresh_interval": int,

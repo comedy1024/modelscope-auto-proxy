@@ -81,6 +81,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"模型参数下限: {settings.min_param_b}B")
     logger.info(f"刷新间隔: {settings.model_refresh_interval}s")
     logger.info(f"管理后台: http://localhost:{settings.proxy_port}/admin")
+    logger.info(f"管理后台账号: {settings.admin_username}")
+    logger.info(f"管理后台密码: {settings.admin_password}")
     logger.info("=" * 60)
 
     # 记录启动时间

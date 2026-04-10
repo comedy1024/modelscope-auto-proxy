@@ -65,6 +65,7 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 
 **管理后台**
 - 内置 Web 管理界面，访问 `/admin` 即可使用
+- 用户名密码认证保护，防止未授权访问
 - 仪表盘：模型数量、运行状态、当前模型一目了然
 - 模型管理：手动启用/禁用模型
 - 日志查看：实时日志、按级别过滤、关键词搜索、自动刷新
@@ -174,11 +175,15 @@ curl http://localhost:8000/v1/chat/completions \
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `MODELSCOPE_API_KEY` | - | ModelScope API 密钥（必填，需包含 `ms-` 前缀） |
-| `PROXY_PORT` | 8000 | 代理服务监听端口 |
+| `PROXY_PORT` | 8000 | 代理服务监听端口（如被占用可改为 8001、9000 等） |
 | `VIRTUAL_MODEL_NAME` | modelscope-auto | 对外暴露的虚拟模型名称 |
 | `MIN_PARAM_B` | 4 | 模型参数量下限（B） |
 | `MODEL_REFRESH_INTERVAL` | 86400 | 模型列表刷新间隔（秒） |
 | `LOG_LEVEL` | INFO | 日志级别 |
+| `ADMIN_USERNAME` | admin | 管理后台用户名 |
+| `ADMIN_PASSWORD` | 自动生成 | 管理后台密码（为空时首次启动自动生成，见启动日志或 .env 文件） |
+
+> **安全提示**：管理后台（`/admin`）需要用户名密码认证才能访问。首次启动如果未设置 `ADMIN_PASSWORD`，系统会自动生成一个随机密码，并写入 `.env` 文件和启动日志中。请在生产环境中务必修改为自己的强密码。
 
 ### Docker 部署（推荐）
 
@@ -191,10 +196,11 @@ git clone https://github.com/comedy1024/modelscope-auto-proxy.git
 # git clone https://gh.llkk.cc/https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
-# 2. 配置 API Key
+# 2. 配置 API Key 和管理后台密码
 cp .env.example .env
 # 编辑 .env，将 ms-your_api_key_here 替换为你的 ModelScope API Key
-# 获取地址: https://www.modelscope.cn/my/myaccesstoken
+# 同时设置 ADMIN_PASSWORD 为你自己的管理后台密码（否则首次启动自动生成随机密码）
+# 获取 API Key 地址: https://www.modelscope.cn/my/myaccesstoken
 vi .env
 
 # 3. 构建并启动（Docker 已内置 pip 阿里云镜像源，国内服务器也能正常构建）
@@ -369,11 +375,15 @@ Point your AI coding tool to `http://localhost:8000/v1` with model name `modelsc
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MODELSCOPE_API_KEY` | - | ModelScope API key (required, include `ms-` prefix) |
-| `PROXY_PORT` | 8000 | Proxy listen port |
+| `PROXY_PORT` | 8000 | Proxy listen port (change if 8000 is occupied) |
 | `VIRTUAL_MODEL_NAME` | modelscope-auto | Virtual model name exposed to clients |
 | `MIN_PARAM_B` | 4 | Minimum model parameter count in billions |
 | `MODEL_REFRESH_INTERVAL` | 86400 | Model list refresh interval in seconds |
 | `LOG_LEVEL` | INFO | Log level |
+| `ADMIN_USERNAME` | admin | Admin dashboard username |
+| `ADMIN_PASSWORD` | auto-generated | Admin dashboard password (auto-generated on first start if empty; see logs or .env file) |
+
+> **Security Note**: The admin dashboard (`/admin`) requires username/password authentication. If `ADMIN_PASSWORD` is not set, a random password is auto-generated on first start and saved to the `.env` file and startup logs. Always set a strong password in production.
 
 ### Docker Deployment (Recommended)
 
@@ -382,9 +392,10 @@ Point your AI coding tool to `http://localhost:8000/v1` with model name `modelsc
 git clone https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
-# 2. Configure API Key
+# 2. Configure API Key and admin password
 cp .env.example .env
 # Edit .env with your ModelScope API Key from https://www.modelscope.cn/my/myaccesstoken
+# Also set ADMIN_PASSWORD for the admin dashboard (auto-generated if left empty)
 
 # 3. Build and start
 docker-compose up -d --build
