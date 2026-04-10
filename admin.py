@@ -366,6 +366,7 @@ async def update_config(config: dict, username: str = Depends(require_auth)):
         "model_refresh_interval": int,
         "log_level": str,
         "virtual_model_name": str,
+        "modelscope_api_key": str,
     }
 
     updated = {}
@@ -374,9 +375,22 @@ async def update_config(config: dict, username: str = Depends(require_auth)):
             try:
                 new_value = type_fn(config[field])
                 old_value = getattr(settings, field)
+
+                # API Key 特殊处理：不显示旧值，且不能为空
+                if field == "modelscope_api_key":
+                    if not new_value or not new_value.startswith("ms-"):
+                        return JSONResponse(
+                            content={"error": "API Key 格式无效，需以 ms- 开头"},
+                            status_code=400,
+                        )
+
                 if new_value != old_value:
                     setattr(settings, field, new_value)
-                    updated[field] = {"old": old_value, "new": new_value}
+                    # API Key 更新时隐藏旧值
+                    if field == "modelscope_api_key":
+                        updated[field] = {"old": "****", "new": f"****{new_value[-4:]}"}
+                    else:
+                        updated[field] = {"old": old_value, "new": new_value}
 
                     # 特殊处理日志级别
                     if field == "log_level":
@@ -394,8 +408,8 @@ async def update_config(config: dict, username: str = Depends(require_auth)):
         _save_to_env(updated)
         logger.info(f"配置已更新: {updated}")
 
-        # 如果修改了 min_param_b，触发模型刷新
-        if "min_param_b" in updated:
+        # 如果修改了 min_param_b 或 modelscope_api_key，触发模型刷新
+        if "min_param_b" in updated or "modelscope_api_key" in updated:
             model_manager.refresh_models()
 
     return JSONResponse(content={
@@ -426,6 +440,7 @@ def _save_to_env(changes: dict):
         "model_refresh_interval": "MODEL_REFRESH_INTERVAL",
         "log_level": "LOG_LEVEL",
         "virtual_model_name": "VIRTUAL_MODEL_NAME",
+        "modelscope_api_key": "MODELSCOPE_API_KEY",
     }
 
     for field, change in changes.items():

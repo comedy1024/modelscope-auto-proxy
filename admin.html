@@ -41,7 +41,6 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   justify-content: space-between;
   height: 56px;
-  position: sticky; top: 0; z-index: 100;
 }
 .header-title {
   font-size: 16px;
@@ -66,6 +65,14 @@ a { color: var(--accent); text-decoration: none; }
   gap: 12px;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+/* Sticky Top */
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-secondary);
 }
 
 /* Nav Tabs */
@@ -368,6 +375,7 @@ tr:hover td { background: var(--bg-hover); }
 </head>
 <body>
 
+<div class="sticky-top">
 <div class="header">
   <div class="header-title">
     <span class="dot" id="statusDot"></span>
@@ -387,6 +395,7 @@ tr:hover td { background: var(--bg-hover); }
   <div class="nav-tab" data-tab="models">模型管理</div>
   <div class="nav-tab" data-tab="logs">日志查看</div>
   <div class="nav-tab" data-tab="config">配置管理</div>
+</div>
 </div>
 
 <div class="main">
@@ -544,6 +553,14 @@ tr:hover td { background: var(--bg-hover); }
     <div class="card">
       <div class="card-header">
         <div class="card-title">修改配置</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ModelScope API Key</label>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="cfgApiKey" type="password" placeholder="ms-xxxxxxxx">
+          <button class="btn btn-outline btn-sm" onclick="toggleApiKeyVisibility()" style="white-space:nowrap;">显示</button>
+        </div>
+        <div class="form-hint">ModelScope API 密钥（必须以 ms- 开头），修改后自动刷新模型列表</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -873,6 +890,8 @@ async function loadConfig() {
   ).join('');
 
   // 填充表单
+  document.getElementById('cfgApiKey').placeholder = data.api_key_preview;
+  document.getElementById('cfgApiKey').value = '';  // 不回显，留空表示不修改
   document.getElementById('cfgVirtualModelName').value = data.virtual_model_name;
   document.getElementById('cfgMinParamB').value = data.min_param_b;
   document.getElementById('cfgRefreshInterval').value = data.model_refresh_interval;
@@ -914,6 +933,12 @@ async function saveConfig() {
     log_level: document.getElementById('cfgLogLevel').value,
   };
 
+  // API Key：只有在用户输入了新值时才提交
+  const newApiKey = document.getElementById('cfgApiKey').value.trim();
+  if (newApiKey) {
+    config.modelscope_api_key = newApiKey;
+  }
+
   // 校验
   if (!config.virtual_model_name) { toast('虚拟模型名不能为空', 'error'); return; }
   if (isNaN(config.min_param_b) || config.min_param_b < 1) { toast('参数下限必须 >= 1', 'error'); return; }
@@ -927,6 +952,19 @@ async function saveConfig() {
     toast('配置已保存并生效', 'success');
     loadConfig();
     loadDashboard();
+  }
+}
+
+// ── API Key 显隐切换 ──────────────────────────────
+function toggleApiKeyVisibility() {
+  const input = document.getElementById('cfgApiKey');
+  const btn = event.target;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '隐藏';
+  } else {
+    input.type = 'password';
+    btn.textContent = '显示';
   }
 }
 
