@@ -74,7 +74,7 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/a546284907/modelscope-auto-proxy.git
+git clone https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 
 # 2. 安装依赖
@@ -250,7 +250,7 @@ With just a free ModelScope account, you can use top-tier models like Qwen3-Code
 ### Quick Start
 
 ```bash
-git clone https://github.com/a546284907/modelscope-auto-proxy.git
+git clone https://github.com/comedy1024/modelscope-auto-proxy.git
 cd modelscope-auto-proxy
 pip install -r requirements.txt
 cp .env.example .env
