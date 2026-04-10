@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ModelScope API 转换器 - 管理后台</title>
+<style>
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+  --bg-input: #0f172a;
+  --border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #06b6d4;
+  --radius: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+
+/* Header */
+.header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  position: sticky; top: 0; z-index: 100;
+}
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-title .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Nav Tabs */
+.nav-tabs {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  gap: 0;
+}
+.nav-tab {
+  padding: 12px 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  user-select: none;
+}
+.nav-tab:hover { color: var(--text-primary); }
+.nav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+
+/* Main */
+.main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+.stat-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.stat-value.text-success { color: var(--success); }
+.stat-value.text-danger { color: var(--danger); }
+.stat-value.text-warning { color: var(--warning); }
+.stat-value.text-info { color: var(--info); }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { opacity: 0.9; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { opacity: 0.9; }
+.btn-warning { background: var(--warning); color: #000; }
+.btn-warning:hover { opacity: 0.9; }
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th, td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--bg-primary);
+  position: sticky; top: 0;
+}
+tr:hover td { background: var(--bg-hover); }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-success { background: rgba(34,197,94,0.15); color: var(--success); }
+.badge-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+.badge-warning { background: rgba(245,158,11,0.15); color: var(--warning); }
+.badge-info { background: rgba(6,182,212,0.15); color: var(--info); }
+
+/* Log Viewer */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.log-viewer {
+  background: #020617;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 600px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-line { padding: 1px 0; }
+.log-line:hover { background: var(--bg-hover); }
+.log-line .time { color: var(--text-muted); }
+.log-line .level-DEBUG { color: var(--text-muted); }
+.log-line .level-INFO { color: var(--info); }
+.log-line .level-WARNING { color: var(--warning); }
+.log-line .level-ERROR { color: var(--danger); }
+.log-line .msg { color: var(--text-primary); }
+
+/* Form */
+.form-group {
+  margin-bottom: 16px;
+}
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.form-input, .form-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent);
+}
+.form-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  top: 70px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  animation: slideIn 0.3s ease;
+  min-width: 280px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.toast-success { background: var(--success); color: #fff; }
+.toast-error { background: var(--danger); color: #fff; }
+.toast-info { background: var(--info); color: #fff; }
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Loading Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+.empty-state .icon { font-size: 36px; margin-bottom: 12px; }
+
+/* Config Display */
+.config-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.config-item:last-child { border-bottom: none; }
+.config-key {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.config-value {
+  font-size: 14px;
+  font-family: 'Cascadia Code', monospace;
+  color: var(--text-primary);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .main { padding: 16px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .nav-tab { padding: 10px 14px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    <span class="dot" id="statusDot"></span>
+    ModelScope API 转换器
+  </div>
+  <div class="header-right">
+    <span id="headerUptime">--</span>
+    <span>|</span>
+    <span id="headerModelCount">-- 个模型</span>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <div class="nav-tab active" data-tab="dashboard">仪表盘</div>
+  <div class="nav-tab" data-tab="models">模型管理</div>
+  <div class="nav-tab" data-tab="logs">日志查看</div>
+  <div class="nav-tab" data-tab="config">配置管理</div>
+</div>
+
+<div class="main">
+  <!-- ==================== 仪表盘 ==================== -->
+  <div class="tab-content active" id="tab-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">总模型数</div>
+        <div class="stat-value text-info" id="statTotal">-</div>
+        <div class="stat-sub">>= 4B 文本模型</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">可用模型</div>
+        <div class="stat-value text-success" id="statActive">-</div>
+        <div class="stat-sub">当前可正常使用</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已禁用</div>
+        <div class="stat-value text-danger" id="statDisabled">-</div>
+        <div class="stat-sub">今日 400/500 错误</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">当前模型</div>
+        <div class="stat-value text-warning" id="statCurrent" style="font-size:16px;word-break:break-all;">-</div>
+        <div class="stat-sub">正在使用的模型</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">系统信息</div>
+      </div>
+      <div id="systemInfo">
+        <div class="config-item">
+          <span class="config-key">服务版本</span>
+          <span class="config-value" id="sysVersion">-</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">运行时间</span>
+          <span class="config-value" id="sysUptime">-</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">虚拟模型名</span>
+          <span class="config-value" id="sysVirtualModel">-</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">代理端口</span>
+          <span class="config-value" id="sysPort">-</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">参数下限</span>
+          <span class="config-value" id="sysMinParam">-</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">刷新间隔</span>
+          <span class="config-value" id="sysRefreshInterval">-</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">上次刷新</span>
+          <span class="config-value" id="sysLastRefresh">-</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">快速操作</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="refreshModels()">刷新模型列表</button>
+        <button class="btn btn-warning" onclick="resetDisabled()">重置所有禁用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 模型管理 ==================== -->
+  <div class="tab-content" id="tab-models">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">模型列表</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="refreshModels()">刷新列表</button>
+          <button class="btn btn-warning btn-sm" onclick="resetDisabled()">重置禁用</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>模型 ID</th>
+              <th>参数量</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="modelsTableBody">
+            <tr><td colspan="5" class="empty-state">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">被禁用的模型</div>
+      </div>
+      <div id="disabledList" class="empty-state">暂无被禁用的模型</div>
+    </div>
+  </div>
+
+  <!-- ==================== 日志查看 ==================== -->
+  <div class="tab-content" id="tab-logs">
+    <div class="card">
+      <div class="log-toolbar">
+        <select class="form-select" id="logLevel" style="width:120px;" onchange="loadLogs()">
+          <option value="ALL">全部级别</option>
+          <option value="DEBUG">DEBUG</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+        <input class="form-input" id="logSearch" placeholder="搜索关键词..." style="width:240px;" onkeydown="if(event.key==='Enter')loadLogs()">
+        <select class="form-select" id="logLines" style="width:120px;" onchange="loadLogs()">
+          <option value="100">100 行</option>
+          <option value="200" selected>200 行</option>
+          <option value="500">500 行</option>
+          <option value="1000">1000 行</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadLogs()">刷新</button>
+        <button class="btn btn-outline btn-sm" id="autoRefreshBtn" onclick="toggleAutoRefresh()">自动刷新: 关</button>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-muted);" id="logCount"></span>
+      </div>
+      <div class="log-viewer" id="logViewer">加载中...</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">日志文件</div>
+      </div>
+      <div id="logFilesList"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 配置管理 ==================== -->
+  <div class="tab-content" id="tab-config">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">当前配置</div>
+        <button class="btn btn-outline btn-sm" onclick="loadConfig()">刷新</button>
+      </div>
+      <div id="configDisplay"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">修改配置</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">虚拟模型名</label>
+          <input class="form-input" id="cfgVirtualModelName" placeholder="modelscope-auto">
+          <div class="form-hint">对外暴露的统一模型名称</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">参数下限 (B)</label>
+          <input class="form-input" id="cfgMinParamB" type="number" min="1" placeholder="4">
+          <div class="form-hint">仅保留参数量 >= 此值的大模型</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">刷新间隔 (秒)</label>
+          <input class="form-input" id="cfgRefreshInterval" type="number" min="60" placeholder="86400">
+          <div class="form-hint">多久重新获取模型列表</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">日志级别</label>
+          <select class="form-select" id="cfgLogLevel">
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+          <div class="form-hint">日志输出级别</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+        <span style="margin-left:12px;font-size:12px;color:var(--text-muted);">修改后自动保存到 .env 并即时生效</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">API 使用示例</div>
+      </div>
+      <pre style="background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;padding:16px;font-size:13px;overflow-x:auto;font-family:'Cascadia Code','Fira Code','Consolas',monospace;line-height:1.6;color:var(--text-secondary);"><code id="apiExample">加载中...</code></pre>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── 工具函数 ────────────────────────────────────────
+const API_BASE = '/admin/api';
+
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+async function api(path, opts = {}) {
+  try {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || `请求失败 (${res.status})`, 'error');
+      return null;
+    }
+    return data;
+  } catch (e) {
+    toast('网络错误: ' + e.message, 'error');
+    return null;
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Tab 切换 ────────────────────────────────────────
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+    if (tab.dataset.tab === 'dashboard') loadDashboard();
+    if (tab.dataset.tab === 'models') loadModels();
+    if (tab.dataset.tab === 'logs') loadLogs();
+    if (tab.dataset.tab === 'config') loadConfig();
+  });
+});
+
+// ── 仪表盘 ──────────────────────────────────────────
+async function loadDashboard() {
+  const data = await api('/status');
+  if (!data) return;
+
+  document.getElementById('statTotal').textContent = data.model_stats.total;
+  document.getElementById('statActive').textContent = data.model_stats.active;
+  document.getElementById('statDisabled').textContent = data.model_stats.disabled_today;
+  document.getElementById('statCurrent').textContent = data.model_stats.current_model
+    ? data.model_stats.current_model.id
+    : '无可用模型';
+
+  document.getElementById('sysVersion').textContent = data.version;
+  document.getElementById('sysUptime').textContent = data.uptime;
+  document.getElementById('sysVirtualModel').textContent = data.virtual_model;
+  document.getElementById('sysPort').textContent = data.proxy_port;
+  document.getElementById('sysMinParam').textContent = data.min_param_b + 'B';
+  document.getElementById('sysRefreshInterval').textContent = _formatInterval(data.refresh_interval);
+  document.getElementById('sysLastRefresh').textContent = data.last_refresh;
+
+  // Header
+  document.getElementById('headerUptime').textContent = data.uptime;
+  document.getElementById('headerModelCount').textContent = data.model_stats.active + '/' + data.model_stats.total + ' 个模型';
+  document.getElementById('statusDot').style.background =
+    data.model_stats.active > 0 ? 'var(--success)' : 'var(--danger)';
+}
+
+function _formatInterval(sec) {
+  if (sec >= 86400) return (sec / 86400).toFixed(0) + ' 天';
+  if (sec >= 3600) return (sec / 3600).toFixed(0) + ' 小时';
+  return sec + ' 秒';
+}
+
+// ── 模型管理 ────────────────────────────────────────
+async function loadModels() {
+  const data = await api('/models');
+  if (!data) return;
+
+  const tbody = document.getElementById('modelsTableBody');
+  if (!data.models || data.models.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无模型数据</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.models.map((m, i) => {
+    const isActive = m.is_active;
+    const statusBadge = isActive
+      ? '<span class="badge badge-success">可用</span>'
+      : '<span class="badge badge-danger">已禁用</span>';
+    const actionBtn = isActive
+      ? `<button class="btn btn-danger btn-sm" onclick="disableModel('${escapeHtml(m.id)}')">禁用</button>`
+      : `<button class="btn btn-success btn-sm" onclick="enableModel('${escapeHtml(m.id)}')">启用</button>`;
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td style="font-family:monospace;font-size:12px;word-break:break-all;">${escapeHtml(m.id)}</td>
+      <td>${m.param_b ? m.param_b + 'B' : '-'}</td>
+      <td>${statusBadge}</td>
+      <td>${actionBtn}</td>
+    </tr>`;
+  }).join('');
+
+  // 被禁用的模型列表
+  const disabledDiv = document.getElementById('disabledList');
+  if (data.disabled_list && data.disabled_list.length > 0) {
+    disabledDiv.innerHTML = data.disabled_list.map(d =>
+      `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="font-family:monospace;font-size:13px;">${escapeHtml(d.id)}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--text-muted);">禁用于 ${d.disabled_date}</span>
+          <button class="btn btn-success btn-sm" onclick="enableModel('${escapeHtml(d.id)}')">启用</button>
+        </div>
+      </div>`
+    ).join('');
+  } else {
+    disabledDiv.innerHTML = '<div class="empty-state">暂无被禁用的模型</div>';
+  }
+}
+
+async function enableModel(modelId) {
+  const data = await api(`/models/enable`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) });
+  if (data) {
+    toast(data.message, 'success');
+    loadModels();
+  }
+}
+
+async function disableModel(modelId) {
+  const data = await api(`/models/disable`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) });
+  if (data) {
+    toast(data.message, 'success');
+    loadModels();
+  }
+}
+
+async function refreshModels() {
+  const data = await api('/refresh', { method: 'POST' });
+  if (data) {
+    toast('模型列表已刷新', 'success');
+    loadDashboard();
+    loadModels();
+  }
+}
+
+async function resetDisabled() {
+  if (!confirm('确定要重置所有被禁用的模型吗？')) return;
+  const data = await api('/reset-disabled', { method: 'POST' });
+  if (data) {
+    toast(data.message, 'success');
+    loadDashboard();
+    loadModels();
+  }
+}
+
+// ── 日志查看 ────────────────────────────────────────
+let _autoRefreshTimer = null;
+
+async function loadLogs() {
+  const level = document.getElementById('logLevel').value;
+  const search = document.getElementById('logSearch').value;
+  const lines = document.getElementById('logLines').value;
+
+  const params = new URLSearchParams({ lines, level, search });
+  const data = await api(`/logs?${params}`);
+  if (!data) return;
+
+  const viewer = document.getElementById('logViewer');
+  if (data.error) {
+    viewer.textContent = data.error;
+    return;
+  }
+
+  if (!data.logs || data.logs.length === 0) {
+    viewer.innerHTML = '<span style="color:var(--text-muted);">暂无日志</span>';
+    document.getElementById('logCount').textContent = '';
+    return;
+  }
+
+  viewer.innerHTML = data.logs.map(line => {
+    // 解析日志格式: 2024-01-01 12:00:00 [INFO] name: message
+    const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+(.*)/);
+    if (match) {
+      const [, time, level, msg] = match;
+      return `<div class="log-line"><span class="time">${escapeHtml(time)}</span> <span class="level-${level}">[${level}]</span> <span class="msg">${escapeHtml(msg)}</span></div>`;
+    }
+    return `<div class="log-line">${escapeHtml(line)}</div>`;
+  }).join('');
+
+  document.getElementById('logCount').textContent =
+    `共 ${data.total} 行，显示 ${data.showing} 行`;
+
+  // 自动滚动到底部
+  viewer.scrollTop = viewer.scrollHeight;
+}
+
+function toggleAutoRefresh() {
+  const btn = document.getElementById('autoRefreshBtn');
+  if (_autoRefreshTimer) {
+    clearInterval(_autoRefreshTimer);
+    _autoRefreshTimer = null;
+    btn.textContent = '自动刷新: 关';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-outline');
+  } else {
+    _autoRefreshTimer = setInterval(loadLogs, 3000);
+    btn.textContent = '自动刷新: 开';
+    btn.classList.remove('btn-outline');
+    btn.classList.add('btn-primary');
+  }
+}
+
+async function loadLogFiles() {
+  const data = await api('/logs/files');
+  if (!data) return;
+
+  const container = document.getElementById('logFilesList');
+  if (!data.files || data.files.length === 0) {
+    container.innerHTML = '<div class="empty-state">暂无日志文件</div>';
+    return;
+  }
+
+  container.innerHTML = data.files.map(f =>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div>
+        <span style="font-family:monospace;font-size:13px;">${escapeHtml(f.name)}</span>
+        <span style="font-size:12px;color:var(--text-muted);margin-left:12px;">${formatBytes(f.size)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:var(--text-muted);">${f.modified}</span>
+        <a href="/admin/api/logs/download/${encodeURIComponent(f.name)}" class="btn btn-outline btn-sm" download>下载</a>
+      </div>
+    </div>`
+  ).join('');
+}
+
+// ── 配置管理 ────────────────────────────────────────
+let _currentConfig = {};
+
+async function loadConfig() {
+  const data = await api('/config');
+  if (!data) return;
+
+  _currentConfig = data;
+
+  const display = document.getElementById('configDisplay');
+  display.innerHTML = [
+    ['ModelScope Base URL', data.modelscope_base_url],
+    ['代理端口', data.proxy_port],
+    ['虚拟模型名', data.virtual_model_name],
+    ['参数下限', data.min_param_b + 'B'],
+    ['刷新间隔', _formatInterval(data.model_refresh_interval)],
+    ['日志级别', data.log_level],
+    ['API Key', data.api_key_preview],
+  ].map(([k, v]) =>
+    `<div class="config-item">
+      <span class="config-key">${k}</span>
+      <span class="config-value">${escapeHtml(String(v))}</span>
+    </div>`
+  ).join('');
+
+  // 填充表单
+  document.getElementById('cfgVirtualModelName').value = data.virtual_model_name;
+  document.getElementById('cfgMinParamB').value = data.min_param_b;
+  document.getElementById('cfgRefreshInterval').value = data.model_refresh_interval;
+  document.getElementById('cfgLogLevel').value = data.log_level;
+
+  // API 示例
+  const host = window.location.host;
+  document.getElementById('apiExample').textContent =
+`# 使用 OpenAI 兼容 API 调用
+# Base URL: http://${host}/v1
+# API Key: 你的 ModelScope API Key
+
+# Python 示例
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="your-modelscope-api-key",
+    base_url="http://${host}/v1"
+)
+
+response = client.chat.completions.create(
+    model="${data.virtual_model_name}",
+    messages=[{"role": "user", "content": "你好"}]
+)
+print(response.choices[0].message.content)
+
+# cURL 示例
+curl http://${host}/v1/chat/completions \\
+  -H "Authorization: Bearer your-modelscope-api-key" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model": "${data.virtual_model_name}", "messages": [{"role": "user", "content": "你好"}]}'`;
+}
+
+async function saveConfig() {
+  const config = {
+    virtual_model_name: document.getElementById('cfgVirtualModelName').value,
+    min_param_b: parseInt(document.getElementById('cfgMinParamB').value),
+    model_refresh_interval: parseInt(document.getElementById('cfgRefreshInterval').value),
+    log_level: document.getElementById('cfgLogLevel').value,
+  };
+
+  // 校验
+  if (!config.virtual_model_name) { toast('虚拟模型名不能为空', 'error'); return; }
+  if (isNaN(config.min_param_b) || config.min_param_b < 1) { toast('参数下限必须 >= 1', 'error'); return; }
+  if (isNaN(config.model_refresh_interval) || config.model_refresh_interval < 60) { toast('刷新间隔必须 >= 60 秒', 'error'); return; }
+
+  const data = await api('/config', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  });
+  if (data) {
+    toast('配置已保存并生效', 'success');
+    loadConfig();
+    loadDashboard();
+  }
+}
+
+// ── 初始化 ──────────────────────────────────────────
+async function init() {
+  loadDashboard();
+  loadLogFiles();
+}
+
+init();
+
+// 每 30 秒刷新仪表盘数据
+setInterval(() => {
+  const activeTab = document.querySelector('.nav-tab.active');
+  if (activeTab && activeTab.dataset.tab === 'dashboard') {
+    loadDashboard();
+  }
+}, 30000);
+</script>
+</body>
+</html>
