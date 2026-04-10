@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  modelscope-proxy:
+    build: .
+    image: modelscope-auto-proxy:latest
+    container_name: modelscope-proxy
+    restart: always
+    ports:
+      - "${PROXY_PORT:-8000}:8000"
+    environment:
+      - MODELSCOPE_API_KEY=${MODELSCOPE_API_KEY}
+      - PROXY_PORT=8000
+      - VIRTUAL_MODEL_NAME=${VIRTUAL_MODEL_NAME:-modelscope-auto}
+      - MIN_PARAM_B=${MIN_PARAM_B:-4}
+      - MODEL_REFRESH_INTERVAL=${MODEL_REFRESH_INTERVAL:-86400}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - modelscope-data:/app/data
+      - modelscope-logs:/app/logs
+
+volumes:
+  modelscope-data:
+  modelscope-logs:

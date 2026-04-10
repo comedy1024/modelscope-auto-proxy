@@ -54,20 +54,52 @@ EXCLUDE_MODEL_IDS = {
     "Qwen/QwQ-32B-Preview",
 }
 
-# 需要包含的关键词（确保是文本生成模型）
-TEXT_MODEL_PATTERNS = [
-    re.compile(r"instruct", re.IGNORECASE),
-    re.compile(r"chat", re.IGNORECASE),
-    re.compile(r"conversation", re.IGNORECASE),
-]
+# ── 已知模型参数量映射表 ─────────────────────────────────────
+# 对于 ID 中不含参数量标识的模型，手动维护其参数量。
+# 格式: model_id -> (总参数B, 激活参数B)，如果只知道总参数则激活参数填 0。
+# 优先级最高，覆盖所有自动解析。
+KNOWN_MODEL_PARAMS = {
+    # DeepSeek 系列
+    "deepseek-ai/DeepSeek-V3.2": (685.0, 37.0),     # MoE 685B 总参数, ~37B 激活
+    "deepseek-ai/DeepSeek-R1-0528": (685.0, 37.0),   # DeepSeek-R1 增强版, 同 V3 架构
+    # MiniMax 系列
+    "MiniMax/MiniMax-M2.5": (456.0, 45.0),           # MoE 456B 总参数
+    "MiniMax/MiniMax-M1-80k": (456.0, 45.0),         # M1 系列同架构
+    # 智谱 GLM 系列
+    "ZhipuAI/GLM-5": (744.0, 40.0),                  # MoE 744B 总参数, 40B 激活
+    "ZhipuAI/GLM-4.7-Flash": (9.0, 9.0),             # GLM-4.7 Flash ~9B
+    # 月之暗面
+    "moonshotai/Kimi-K2.5": (1000.0, 60.0),          # MoE ~1T 总参数
+    # 上海 AI 实验室
+    "Shanghai_AI_Laboratory/Intern-S1": (107.0, 107.0),  # Intern-S1 ~107B
+    "Shanghai_AI_Laboratory/Intern-S1-mini": (27.0, 27.0), # Intern-S1-mini ~27B
+    # 阶跃星辰
+    "stepfun-ai/Step-3.5-Flash": (80.0, 22.0),       # MoE ~80B
+    # 小米
+    "XiaomiMiMo/MiMo-V2-Flash": (17.0, 17.0),        # MiMo V2 Flash ~17B
+    # 美团
+    "meituan-longcat/LongCat-Flash-Lite": (27.0, 27.0), # ~27B
+    # Mistral 系列（ID 中没有参数量标识）
+    "mistralai/Mistral-Large-Instruct-2407": (123.0, 123.0),  # Mistral Large 123B
+    "mistralai/Mistral-Small-Instruct-2409": (22.0, 22.0),    # Mistral Small 22B
+    # Cohere
+    "LLM-Research/c4ai-command-r-plus-08-2024": (104.0, 104.0),  # Command R+ 104B
+    # Meta Llama 4
+    "LLM-Research/Llama-4-Maverick-17B-128E-Instruct": (400.0, 17.0),  # MoE 400B/17B 激活
+}
 
 
 def parse_param_size(model_id: str) -> float:
     """
     从模型 ID 中提取参数量（单位 B）。
     例如: Qwen/Qwen2.5-72B-Instruct -> 72.0
-          deepseek-ai/DeepSeek-R1-0528 -> 671.0 (需要从元数据获取)
+          deepseek-ai/DeepSeek-R1-0528 -> 0.0 (需要查映射表)
     """
+    # 优先查映射表
+    if model_id in KNOWN_MODEL_PARAMS:
+        total, active = KNOWN_MODEL_PARAMS[model_id]
+        return total
+
     # 尝试匹配常见模式: 72B, 7b, 0.5B, 480B-A35B 等
     match = re.search(r"(\d+(?:\.\d+)?)\s*[Bb]", model_id)
     if match:
@@ -78,7 +110,7 @@ def parse_param_size(model_id: str) -> float:
     if match:
         return float(match.group(1))
 
-    # 无法解析时返回 0，后续会被过滤
+    # 无法解析时返回 0，后续会尝试通过其他方式获取
     return 0.0
 
 
@@ -128,22 +160,36 @@ def fetch_models_from_api() -> list[dict]:
 
 def fetch_model_detail(model_id: str) -> dict | None:
     """
-    获取单个模型的详细信息，用于补充参数量等元数据。
-    如果 API 不支持，则返回 None，回退到 ID 解析。
+    从 ModelScope hub API 获取模型详细信息（含 StorageSize）。
+    用于估算无法从 ID 解析参数量的模型。
     """
-    url = f"{settings.modelscope_base_url}/models/{model_id}"
-    headers = {
-        "Authorization": f"Bearer {settings.modelscope_api_key}",
-    }
+    url = f"https://modelscope.cn/api/v1/models/{model_id}"
 
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get(url, headers=headers)
+            resp = client.get(url)
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json().get("Data", {})
+                return data
     except Exception:
         pass
     return None
+
+
+def estimate_param_from_storage(storage_size: int) -> float:
+    """
+    从模型存储大小估算参数量（单位 B）。
+    粗略规则：
+    - 纯 BF16: size / 2 = 参数数
+    - FP8 混合: size / 1.2 ≈ 参数数
+    - 纯 FP32: size / 4 = 参数数
+    综合取 size / 1.5 作为折中估算，再转换为 B。
+    """
+    if storage_size <= 0:
+        return 0.0
+    # 折中估算: 假设平均每参数约 1.5 字节（混合精度）
+    estimated_b = storage_size / 1.5 / 1e9
+    return round(estimated_b, 1)
 
 
 def get_filtered_models() -> list[dict]:
@@ -155,6 +201,29 @@ def get_filtered_models() -> list[dict]:
     if not raw_models:
         logger.warning("未获取到任何模型，返回空列表")
         return []
+
+    # 找出所有 param=0 的文本模型，需要从 hub API 获取详细信息
+    models_need_detail = []
+    for m in raw_models:
+        model_id = m.get("id", "")
+        if not model_id:
+            continue
+        if not is_text_model(model_id):
+            continue
+        # 映射表和 ID 解析都无法获取参数量
+        if model_id not in KNOWN_MODEL_PARAMS and parse_param_size(model_id) == 0:
+            models_need_detail.append(model_id)
+
+    # 批量获取未知模型的详细信息（用于估算参数量）
+    storage_map: dict[str, int] = {}
+    if models_need_detail:
+        logger.info(f"需要从 hub API 获取参数量的模型: {len(models_need_detail)} 个")
+        for mid in models_need_detail:
+            detail = fetch_model_detail(mid)
+            if detail:
+                ss = detail.get("StorageSize", 0)
+                if ss:
+                    storage_map[mid] = ss
 
     filtered = []
     for m in raw_models:
@@ -170,14 +239,16 @@ def get_filtered_models() -> list[dict]:
         # 解析参数量
         param_b = parse_param_size(model_id)
 
-        # 尝试从详细 API 获取更精确的参数量
+        # 如果映射表和 ID 解析都失败，尝试从存储大小估算
         if param_b == 0:
-            detail = fetch_model_detail(model_id)
-            if detail and "param_size" in detail:
-                try:
-                    param_b = float(detail["param_size"])
-                except (ValueError, TypeError):
-                    pass
+            if model_id in storage_map:
+                param_b = estimate_param_from_storage(storage_map[model_id])
+                logger.info(f"从存储大小估算参数量: {model_id} -> {param_b}B (storage={storage_map[model_id] / 1e9:.1f}GB)")
+            else:
+                # 最后兜底: 既然通过了文本模型过滤且在 API 推理列表中，
+                # 说明是可用大模型，给予一个保守默认值以确保不被过滤
+                param_b = 100.0
+                logger.info(f"无法获取参数量，使用默认值: {model_id} -> {param_b}B")
 
         # 过滤小于阈值的模型
         if param_b < settings.min_param_b:

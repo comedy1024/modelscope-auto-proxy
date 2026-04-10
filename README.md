@@ -183,9 +183,108 @@ curl http://localhost:8000/v1/chat/completions \
 ```bash
 docker build -t modelscope-auto-proxy .
 docker run -d \
+  --name modelscope-proxy \
+  --restart always \
   -p 8000:8000 \
   -e MODELSCOPE_API_KEY=ms-your_key_here \
+  -v modelscope-data:/app/data \
   modelscope-auto-proxy
+```
+
+### 宝塔面板 Docker 部署（推荐）
+
+如果你使用宝塔面板管理服务器，可以按以下步骤快速部署：
+
+**第一步：安装 Docker 管理器**
+
+在宝塔面板 → 软件商店 → 搜索「Docker管理器」→ 安装
+
+**第二步：创建项目目录和配置文件**
+
+```bash
+# 进入宝塔终端，创建项目目录
+mkdir -p /opt/modelscope-auto-proxy
+cd /opt/modelscope-auto-proxy
+
+# 下载 docker-compose.yml 和 .env 配置
+curl -O https://raw.githubusercontent.com/comedy1024/modelscope-auto-proxy/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/comedy1024/modelscope-auto-proxy/main/.env.example
+cp .env.example .env
+```
+
+**第三步：编辑 .env 填入 API Key**
+
+```bash
+vi .env
+```
+
+将 `ms-your_api_key_here` 替换为你的 ModelScope API Key（在 https://www.modelscope.cn/my/myaccesstoken 获取）
+
+**第四步：启动服务**
+
+```bash
+cd /opt/modelscope-auto-proxy
+docker compose up -d
+```
+
+**第五步：验证服务**
+
+浏览器访问 `http://你的服务器IP:8000`，应该能看到首页。访问 `/admin` 进入管理后台。
+
+**通过宝塔 Docker 管理器操作**
+
+你也可以直接在宝塔面板 → Docker → Compose 中添加项目：
+
+1. 点击「添加Compose项目」
+2. 项目名称填：`modelscope-proxy`
+3. 将下面的 Compose 内容粘贴进去：
+
+```yaml
+services:
+  modelscope-proxy:
+    image: ghcr.io/comedy1024/modelscope-auto-proxy:latest
+    container_name: modelscope-proxy
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - MODELSCOPE_API_KEY=ms-your_api_key_here
+    volumes:
+      - modelscope-data:/app/data
+
+volumes:
+  modelscope-data:
+```
+
+4. 将 `ms-your_api_key_here` 替换为你的 API Key
+5. 点击「添加」启动
+
+**配置反向代理（可选）**
+
+如果需要通过域名访问或启用 HTTPS：
+
+1. 宝塔面板 → 网站 → 添加站点
+2. 填入域名，PHP 版本选「纯静态」
+3. 站点设置 → 反向代理 → 添加反向代理
+4. 目标 URL 填 `http://127.0.0.1:8000`
+5. 启用缓存关闭，保存即可
+
+**查看日志**
+
+```bash
+# 实时日志
+docker logs -f modelscope-proxy
+
+# 在宝塔 Docker 管理器中
+# Docker → 容器 → modelscope-proxy → 日志
+```
+
+**更新服务**
+
+```bash
+cd /opt/modelscope-auto-proxy
+docker compose pull
+docker compose up -d
 ```
 
 ### 作为系统服务运行
@@ -270,6 +369,28 @@ Point your AI coding tool to `http://localhost:8000/v1` with model name `modelsc
 | `MIN_PARAM_B` | 4 | Minimum model parameter count in billions |
 | `MODEL_REFRESH_INTERVAL` | 86400 | Model list refresh interval in seconds |
 | `LOG_LEVEL` | INFO | Log level |
+
+### Docker Deployment
+
+```bash
+docker build -t modelscope-auto-proxy .
+docker run -d \
+  --name modelscope-proxy \
+  --restart always \
+  -p 8000:8000 \
+  -e MODELSCOPE_API_KEY=ms-your_key_here \
+  -v modelscope-data:/app/data \
+  modelscope-auto-proxy
+```
+
+Or with docker-compose:
+
+```bash
+curl -O https://raw.githubusercontent.com/comedy1024/modelscope-auto-proxy/main/docker-compose.yml
+cp .env.example .env
+# Edit .env with your API key
+docker compose up -d
+```
 
 ### Disclaimer
 
