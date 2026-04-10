@@ -1,23 +1,23 @@
 """
 Admin 后台路由 — 提供管理界面的 API 端点。
+- Cookie/Session 认证保护（页面登录）
 - 系统状态仪表盘
 - 模型管理（查看、启用/禁用、刷新）
 - 日志查看（实时、按文件）
 - 配置管理（查看、热更新）
-- Basic Auth 认证保护
 """
 import json
 import logging
-import os
 import secrets
 import hashlib
+import hmac
+import time
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request, Depends
-from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import APIRouter, Query, Request, Depends, HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from config import settings
 from model_manager import model_manager
 
@@ -25,28 +25,123 @@ logger = logging.getLogger("admin")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-# ── Basic Auth 认证 ──────────────────────────────────────
-security = HTTPBasic()
+# ── Cookie/Session 认证 ─────────────────────────────────
+# 用 HMAC 签名的 cookie 做轻量 session，无需服务端存储
+
+_SESSION_COOKIE = "msp_session"
+_SESSION_MAX_AGE = 86400 * 7  # 7 天有效
 
 
-def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    """验证管理后台的 Basic Auth 凭证"""
-    correct_username = secrets.compare_digest(
-        credentials.username.encode("utf8"),
-        settings.admin_username.encode("utf8"),
-    )
-    correct_password = secrets.compare_digest(
-        credentials.password.encode("utf8"),
-        settings.admin_password.encode("utf8"),
-    )
+def _sign_session(username: str, expires: int) -> str:
+    """生成 session 签名"""
+    msg = f"{username}:{expires}"
+    sig = hmac.new(
+        settings.admin_password.encode(), msg.encode(), hashlib.sha256
+    ).hexdigest()
+    return f"{msg}:{sig}"
+
+
+def _verify_session(token: str) -> Optional[str]:
+    """验证 session token，返回用户名或 None"""
+    try:
+        parts = token.split(":")
+        if len(parts) != 3:
+            return None
+        username, expires_str, sig = parts
+        expires = int(expires_str)
+
+        # 检查过期
+        if time.time() > expires:
+            return None
+
+        # 验证签名
+        expected = _sign_session(username, expires)
+        if not hmac.compare_digest(token, expected):
+            return None
+
+        # 验证用户名
+        if not secrets.compare_digest(username.encode(), settings.admin_username.encode()):
+            return None
+
+        return username
+    except Exception:
+        return None
+
+
+def _get_session_from_request(request: Request) -> Optional[str]:
+    """从请求中获取 session 用户名"""
+    token = request.cookies.get(_SESSION_COOKIE)
+    if not token:
+        return None
+    return _verify_session(token)
+
+
+def require_auth(request: Request) -> str:
+    """认证依赖：验证 cookie session，失败返回 401"""
+    username = _get_session_from_request(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="未登录或会话已过期")
+    return username
+
+
+# ── 登录页面 ──────────────────────────────────────────
+_LOGIN_HTML: Optional[str] = None
+
+
+def _load_login_html() -> str:
+    """加载并缓存 login.html"""
+    global _LOGIN_HTML
+    if _LOGIN_HTML is None:
+        html_path = Path(__file__).parent / "login.html"
+        _LOGIN_HTML = html_path.read_text(encoding="utf-8")
+    return _LOGIN_HTML
+
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page():
+    """登录页面"""
+    return HTMLResponse(content=_load_login_html())
+
+
+@router.post("/api/login")
+async def api_login(request: Request):
+    """登录 API"""
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="无效请求")
+
+    username = data.get("username", "")
+    password = data.get("password", "")
+
+    correct_username = secrets.compare_digest(username.encode(), settings.admin_username.encode())
+    correct_password = secrets.compare_digest(password.encode(), settings.admin_password.encode())
+
     if not (correct_username and correct_password):
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=401,
-            detail="用户名或密码错误",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    # 生成 session
+    expires = int(time.time()) + _SESSION_MAX_AGE
+    token = _sign_session(username, expires)
+
+    response = JSONResponse(content={"message": "登录成功", "username": username})
+    response.set_cookie(
+        key=_SESSION_COOKIE,
+        value=token,
+        max_age=_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    logger.info(f"管理员登录成功: {username}")
+    return response
+
+
+@router.post("/api/logout")
+async def api_logout():
+    """退出登录"""
+    response = JSONResponse(content={"message": "已退出登录"})
+    response.delete_cookie(key=_SESSION_COOKIE)
+    return response
 
 
 # ── 前端页面 ──────────────────────────────────────────
@@ -63,14 +158,17 @@ def _load_admin_html() -> str:
 
 
 @router.get("", response_class=HTMLResponse)
-async def admin_page(username: str = Depends(verify_admin)):
-    """Admin 管理后台页面（需要认证）"""
+async def admin_page(request: Request):
+    """Admin 管理后台页面（需要登录）"""
+    username = _get_session_from_request(request)
+    if not username:
+        return RedirectResponse(url="/admin/login", status_code=302)
     return HTMLResponse(content=_load_admin_html())
 
 
 # ── 系统状态 ──────────────────────────────────────────
 @router.get("/api/status")
-async def system_status(username: str = Depends(verify_admin)):
+async def system_status(username: str = Depends(require_auth)):
     """获取系统状态概览（需要认证）"""
     status = model_manager.get_status()
     return JSONResponse(content={
@@ -121,14 +219,14 @@ def _get_last_refresh_time() -> str:
 
 # ── 模型管理 ──────────────────────────────────────────
 @router.get("/api/models")
-async def list_models(username: str = Depends(verify_admin)):
+async def list_models(username: str = Depends(require_auth)):
     """获取模型列表（含状态，需要认证）"""
     status = model_manager.get_status()
     return JSONResponse(content=status)
 
 
 @router.post("/api/models/enable")
-async def enable_model(data: dict, username: str = Depends(verify_admin)):
+async def enable_model(data: dict, username: str = Depends(require_auth)):
     """手动启用一个被禁用的模型（需要认证）"""
     model_id = data.get("model_id", "")
     if not model_id:
@@ -142,7 +240,7 @@ async def enable_model(data: dict, username: str = Depends(verify_admin)):
 
 
 @router.post("/api/models/disable")
-async def disable_model(data: dict, username: str = Depends(verify_admin)):
+async def disable_model(data: dict, username: str = Depends(require_auth)):
     """手动禁用一个模型（需要认证）"""
     model_id = data.get("model_id", "")
     if not model_id:
@@ -152,7 +250,7 @@ async def disable_model(data: dict, username: str = Depends(verify_admin)):
 
 
 @router.post("/api/refresh")
-async def refresh_models(username: str = Depends(verify_admin)):
+async def refresh_models(username: str = Depends(require_auth)):
     """手动触发模型列表刷新（需要认证）"""
     model_manager.refresh_models()
     return JSONResponse(content={
@@ -162,7 +260,7 @@ async def refresh_models(username: str = Depends(verify_admin)):
 
 
 @router.post("/api/reset-disabled")
-async def reset_all_disabled(username: str = Depends(verify_admin)):
+async def reset_all_disabled(username: str = Depends(require_auth)):
     """重置所有被禁用的模型（需要认证）"""
     with model_manager._lock:
         count = len(model_manager._disabled)
@@ -178,7 +276,7 @@ async def get_logs(
     lines: int = Query(default=200, ge=1, le=2000),
     level: str = Query(default="ALL", description="过滤级别: ALL, DEBUG, INFO, WARNING, ERROR"),
     search: str = Query(default="", description="搜索关键词"),
-    username: str = Depends(verify_admin),
+    username: str = Depends(require_auth),
 ):
     """获取日志内容（需要认证）"""
     log_file = settings.log_dir / "modelscope-proxy.log"
@@ -212,7 +310,7 @@ async def get_logs(
 
 
 @router.get("/api/logs/files")
-async def list_log_files(username: str = Depends(verify_admin)):
+async def list_log_files(username: str = Depends(require_auth)):
     """列出所有日志文件（需要认证）"""
     log_dir = settings.log_dir
     files = []
@@ -227,7 +325,7 @@ async def list_log_files(username: str = Depends(verify_admin)):
 
 
 @router.get("/api/logs/download/{filename}")
-async def download_log(filename: str, username: str = Depends(verify_admin)):
+async def download_log(filename: str, username: str = Depends(require_auth)):
     """下载日志文件（需要认证）"""
     # 安全检查：防止路径遍历
     if ".." in filename or "/" in filename or "\\" in filename:
@@ -245,7 +343,7 @@ async def download_log(filename: str, username: str = Depends(verify_admin)):
 
 # ── 配置管理 ──────────────────────────────────────────
 @router.get("/api/config")
-async def get_config(username: str = Depends(verify_admin)):
+async def get_config(username: str = Depends(require_auth)):
     """获取当前配置（隐藏敏感信息，需要认证）"""
     return JSONResponse(content={
         "modelscope_base_url": settings.modelscope_base_url,
@@ -261,7 +359,7 @@ async def get_config(username: str = Depends(verify_admin)):
 
 
 @router.post("/api/config")
-async def update_config(config: dict, username: str = Depends(verify_admin)):
+async def update_config(config: dict, username: str = Depends(require_auth)):
     """热更新配置（部分字段支持运行时修改，需要认证）"""
     updatable_fields = {
         "min_param_b": int,

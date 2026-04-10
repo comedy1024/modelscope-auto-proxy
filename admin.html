@@ -377,6 +377,8 @@ tr:hover td { background: var(--bg-hover); }
     <span id="headerUptime">--</span>
     <span>|</span>
     <span id="headerModelCount">-- 个模型</span>
+    <span>|</span>
+    <button class="btn btn-outline btn-sm" onclick="handleLogout()" style="padding:4px 12px;font-size:12px;">退出登录</button>
   </div>
 </div>
 
@@ -607,9 +609,13 @@ async function api(path, opts = {}) {
       headers: { 'Content-Type': 'application/json' },
       ...opts,
     });
+    if (res.status === 401) {
+      window.location.href = '/admin/login';
+      return null;
+    }
     const data = await res.json();
     if (!res.ok) {
-      toast(data.error || `请求失败 (${res.status})`, 'error');
+      toast(data.error || data.detail || `请求失败 (${res.status})`, 'error');
       return null;
     }
     return data;
@@ -922,6 +928,12 @@ async function saveConfig() {
     loadConfig();
     loadDashboard();
   }
+}
+
+// ── 退出登录 ──────────────────────────────────────────
+async function handleLogout() {
+  await fetch('/admin/api/logout', { method: 'POST' });
+  window.location.href = '/admin/login';
 }
 
 // ── 初始化 ──────────────────────────────────────────
