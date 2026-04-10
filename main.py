@@ -13,9 +13,11 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import settings
@@ -153,9 +155,28 @@ async def force_refresh():
     })
 
 
-@app.get("/")
+# ── 首页 HTML 缓存 ─────────────────────────────────────────
+_INDEX_HTML: Optional[str] = None
+
+
+def _load_index_html() -> str:
+    """加载并缓存 index.html"""
+    global _INDEX_HTML
+    if _INDEX_HTML is None:
+        html_path = Path(__file__).parent / "index.html"
+        _INDEX_HTML = html_path.read_text(encoding="utf-8")
+    return _INDEX_HTML
+
+
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """根路径，返回服务信息"""
+    """根路径，返回首页宣传页"""
+    return HTMLResponse(content=_load_index_html())
+
+
+@app.get("/api/info")
+async def api_info():
+    """API 信息端点（供程序化访问）"""
     return JSONResponse(content={
         "service": "ModelScope API 转换器",
         "version": "1.0.0",

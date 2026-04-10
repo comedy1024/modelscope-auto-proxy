@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ModelScope Auto Proxy</title>
+<style>
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+  --border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #06b6d4;
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+a { color: var(--accent); text-decoration: none; }
+
+/* Hero */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+  position: relative;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* Logo */
+.logo {
+  width: 80px; height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 32px;
+  box-shadow: 0 0 60px rgba(59,130,246,0.3);
+  position: relative;
+}
+.logo svg { width: 44px; height: 44px; fill: white; }
+
+/* Title */
+.hero-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-subtitle {
+  font-size: 20px;
+  color: var(--text-secondary);
+  max-width: 560px;
+  line-height: 1.6;
+  margin-bottom: 48px;
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.2);
+  border-radius: 20px;
+  font-size: 14px;
+  color: var(--success);
+  margin-bottom: 32px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* CTA buttons */
+.cta-group {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 64px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+.btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { background: var(--bg-hover); border-color: var(--accent); }
+
+/* Stats row */
+.stats-row {
+  display: flex;
+  gap: 48px;
+  margin-bottom: 80px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.stat-item { text-align: center; }
+.stat-value {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.stat-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Features */
+.features {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+.features-title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 48px;
+}
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  transition: all 0.2s;
+}
+.feature-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.feature-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 16px;
+  font-size: 22px;
+}
+.feature-icon.blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+.feature-icon.green { background: rgba(34,197,94,0.15); color: var(--success); }
+.feature-icon.yellow { background: rgba(245,158,11,0.15); color: var(--warning); }
+.feature-icon.cyan { background: rgba(6,182,212,0.15); color: var(--info); }
+.feature-icon.purple { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+.feature-icon.red { background: rgba(239,68,68,0.15); color: var(--danger); }
+.feature-name { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.feature-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+/* Quick start code */
+.quickstart {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+.quickstart-title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 32px;
+}
+.code-block {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #e6edf3;
+  overflow-x: auto;
+  position: relative;
+}
+.code-block .comment { color: #8b949e; }
+.code-block .cmd { color: #79c0ff; }
+.code-block .string { color: #a5d6ff; }
+.code-block .flag { color: #ffa657; }
+.copy-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.copy-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 32px 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.footer a { color: var(--text-secondary); }
+.footer a:hover { color: var(--accent); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .hero-title { font-size: 32px; }
+  .hero-subtitle { font-size: 16px; }
+  .stats-row { gap: 32px; }
+  .stat-value { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="logo">
+    <svg viewBox="0 0 24 24"><path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z"/></svg>
+  </div>
+  <div class="status-badge" id="statusBadge">
+    <span class="status-dot"></span>
+    <span id="statusText">Loading...</span>
+  </div>
+  <h1 class="hero-title">ModelScope Auto Proxy</h1>
+  <p class="hero-subtitle">
+    OpenAI 兼容接口，零配置接入 Cursor / Cline / Aider。<br>
+    自动选模 + 故障切换，免费使用顶级大模型。
+  </p>
+  <div class="cta-group">
+    <a href="/admin" class="btn btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      管理后台
+    </a>
+    <a href="https://github.com/comedy1024/modelscope-auto-proxy" target="_blank" class="btn btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+  </div>
+  <div class="stats-row" id="statsRow">
+    <div class="stat-item">
+      <div class="stat-value" id="statModels">-</div>
+      <div class="stat-label">可用模型</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="statActive">-</div>
+      <div class="stat-label">活跃模型</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="statUptime">-</div>
+      <div class="stat-label">运行时间</div>
+    </div>
+  </div>
+</div>
+
+<div class="features">
+  <h2 class="features-title">核心特性</h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+      <div class="feature-name">智能模型选择</div>
+      <div class="feature-desc">自动获取可用模型列表，按参数量排序优先使用最强模型，无需手动指定。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="feature-name">故障自动切换</div>
+      <div class="feature-desc">遇到 400/500 错误自动标记并切换下一个模型，每日重置禁用状态。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon yellow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+      </div>
+      <div class="feature-name">OpenAI 完全兼容</div>
+      <div class="feature-desc">接口格式与 OpenAI API 100% 兼容，支持 SSE 流式响应，即插即用。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon cyan">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <div class="feature-name">Vibe Coding 优化</div>
+      <div class="feature-desc">智能过滤视觉/多模态/推理专用/基座模型，只保留适合编程的模型。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon purple">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </div>
+      <div class="feature-name">管理后台</div>
+      <div class="feature-desc">内置 Web 管理界面，实时日志、模型管理、在线配置，开箱即用。</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon red">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      </div>
+      <div class="feature-name">Docker 一键部署</div>
+      <div class="feature-desc">支持 Docker 和 systemd 部署，5 分钟从零开始，开箱即用。</div>
+    </div>
+  </div>
+</div>
+
+<div class="quickstart">
+  <h2 class="quickstart-title">5 分钟快速开始</h2>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <span class="comment"># 克隆项目</span><br>
+    <span class="cmd">git</span> clone https://github.com/comedy1024/modelscope-auto-proxy.git<br>
+    <span class="cmd">cd</span> modelscope-auto-proxy<br><br>
+    <span class="comment"># 安装依赖</span><br>
+    <span class="cmd">pip</span> install <span class="flag">-r</span> requirements.txt<br><br>
+    <span class="comment"># 配置 API Key</span><br>
+    <span class="cmd">cp</span> .env.example .env<br>
+    <span class="comment"># 编辑 .env，填入你的 ModelScope API Key</span><br><br>
+    <span class="comment"># 启动服务</span><br>
+    <span class="cmd">python</span> main.py
+  </div>
+</div>
+
+<div class="footer">
+  <p>ModelScope Auto Proxy &mdash; <a href="https://github.com/comedy1024/modelscope-auto-proxy">GitHub</a> &middot; <a href="/admin">管理后台</a> &middot; <a href="/v1/status">API 状态</a></p>
+  <p style="margin-top:8px;">仅供学习和个人使用，请遵守 ModelScope 服务条款。模型版权归各模型原作者所有。</p>
+</div>
+
+<script>
+// Fetch live status
+fetch('/admin/api/status')
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('statModels').textContent = data.model_stats.total;
+    document.getElementById('statActive').textContent = data.model_stats.active;
+    document.getElementById('statUptime').textContent = data.uptime;
+    document.getElementById('statusText').textContent =
+      data.model_stats.active > 0
+        ? 'Running \u00B7 ' + data.model_stats.current_model?.split('/')?.pop?.() || 'OK'
+        : 'No active models';
+  })
+  .catch(() => {
+    document.getElementById('statusText').textContent = 'Service offline';
+    document.querySelector('.status-dot').style.background = 'var(--danger)';
+  });
+
+// Copy code
+function copyCode(btn) {
+  const block = btn.parentElement;
+  const text = block.innerText.replace('Copy', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+</body>
+</html>
