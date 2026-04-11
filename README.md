@@ -35,17 +35,20 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 ### 管理后台预览
 
 <div align="center">
+<img src="docs/admin-login.png" width="700" alt="管理后台 - 登录认证"/>
+<p><em>登录认证：用户名密码保护，防止未授权访问</em></p>
+
 <img src="docs/admin-dashboard.png" width="700" alt="管理后台 - 仪表盘"/>
 <p><em>仪表盘：模型数量、运行状态、当前模型一目了然</em></p>
+
+<img src="docs/admin-stats.png" width="700" alt="管理后台 - Token 统计"/>
+<p><em>Token 统计：按模型统计请求数和 Token 用量</em></p>
 
 <img src="docs/admin-logs.png" width="700" alt="管理后台 - 请求日志"/>
 <p><em>请求日志：实时查看请求详情，按级别过滤和关键词搜索</em></p>
 
 <img src="docs/admin-config.png" width="700" alt="管理后台 - 实时配置"/>
 <p><em>实时配置：在线修改参数，即时生效并持久化</em></p>
-
-<img src="docs/admin-stats.png" width="700" alt="管理后台 - Token 统计"/>
-<p><em>Token 统计：按模型统计请求数和 Token 用量</em></p>
 </div>
 
 ### 核心特性
