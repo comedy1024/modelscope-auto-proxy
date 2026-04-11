@@ -393,6 +393,7 @@ tr:hover td { background: var(--bg-hover); }
 <div class="nav-tabs">
   <div class="nav-tab active" data-tab="dashboard">仪表盘</div>
   <div class="nav-tab" data-tab="models">模型管理</div>
+  <div class="nav-tab" data-tab="stats">Token 统计</div>
   <div class="nav-tab" data-tab="logs">日志查看</div>
   <div class="nav-tab" data-tab="config">配置管理</div>
 </div>
@@ -416,6 +417,11 @@ tr:hover td { background: var(--bg-hover); }
         <div class="stat-label">已禁用</div>
         <div class="stat-value text-danger" id="statDisabled">-</div>
         <div class="stat-sub">今日 400/500 错误</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">冷却中</div>
+        <div class="stat-value text-warning" id="statCooldown">-</div>
+        <div class="stat-sub">429 限速冷却 1h</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">当前模型</div>
@@ -507,6 +513,81 @@ tr:hover td { background: var(--bg-hover); }
     </div>
   </div>
 
+  <!-- ==================== Token 统计 ==================== -->
+  <div class="tab-content" id="tab-stats">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">总请求数</div>
+        <div class="stat-value text-info" id="statsTotalReq">-</div>
+        <div class="stat-sub">自服务启动</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">成功请求</div>
+        <div class="stat-value text-success" id="statsTotalSuccess">-</div>
+        <div class="stat-sub" id="statsSuccessRate">成功率 -</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">失败请求</div>
+        <div class="stat-value text-danger" id="statsTotalErrors">-</div>
+        <div class="stat-sub">含 429/4xx/5xx</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">总 Token 用量</div>
+        <div class="stat-value text-warning" id="statsTotalTokens">-</div>
+        <div class="stat-sub" id="statsTokenDetail">输入 - 输出 -</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">按模型统计</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline btn-sm" onclick="loadStats()">刷新</button>
+          <button class="btn btn-danger btn-sm" onclick="resetStats()">重置统计</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>模型</th>
+              <th>请求数</th>
+              <th>成功</th>
+              <th>429</th>
+              <th>其他错误</th>
+              <th>输入 Token</th>
+              <th>输出 Token</th>
+              <th>总 Token</th>
+            </tr>
+          </thead>
+          <tbody id="statsModelTable">
+            <tr><td colspan="8" class="empty-state">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">近 24 小时趋势</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>小时</th>
+              <th>请求数</th>
+              <th>Token 用量</th>
+            </tr>
+          </thead>
+          <tbody id="statsTrendTable">
+            <tr><td colspan="3" class="empty-state">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 日志查看 ==================== -->
   <div class="tab-content" id="tab-logs">
     <div class="card">
@@ -595,6 +676,14 @@ tr:hover td { background: var(--bg-hover); }
         <label class="form-label">日志保留天数</label>
         <input class="form-input" id="cfgLogRetention" type="number" min="0" placeholder="30" style="max-width:200px;">
         <div class="form-hint">0 表示永不清空，超过天数的旧日志文件自动删除</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">回复头部模型标识</label>
+        <select class="form-select" id="cfgShowModelTag" style="max-width:200px;">
+          <option value="false">关闭（默认，vibe coding 推荐）</option>
+          <option value="true">开启（在每条回复前加 [模型名]）</option>
+        </select>
+        <div class="form-hint">开启后，每条 AI 回复文本开头会自动注入 [Kimi-K2.5] 等模型标识，便于了解当前使用的模型</div>
       </div>
       <div style="margin-top:16px;">
         <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
@@ -692,6 +781,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 
     if (tab.dataset.tab === 'dashboard') loadDashboard();
     if (tab.dataset.tab === 'models') loadModels();
+    if (tab.dataset.tab === 'stats') loadStats();
     if (tab.dataset.tab === 'logs') loadLogs();
     if (tab.dataset.tab === 'config') loadConfig();
   });
@@ -705,6 +795,7 @@ async function loadDashboard() {
   document.getElementById('statTotal').textContent = data.model_stats.total;
   document.getElementById('statActive').textContent = data.model_stats.active;
   document.getElementById('statDisabled').textContent = data.model_stats.disabled_today;
+  document.getElementById('statCooldown').textContent = data.model_stats.cooldown_count ?? 0;
   document.getElementById('statCurrent').textContent = data.model_stats.current_model
     ? data.model_stats.current_model.id
     : '无可用模型';
@@ -743,10 +834,17 @@ async function loadModels() {
 
   tbody.innerHTML = data.models.map((m, i) => {
     const isActive = m.is_active;
-    const statusBadge = isActive
-      ? '<span class="badge badge-success">可用</span>'
-      : '<span class="badge badge-danger">已禁用</span>';
-    const actionBtn = isActive
+    const isCooldown = m.is_cooldown;
+    const isDisabled = m.is_disabled;
+    let statusBadge;
+    if (isActive) {
+      statusBadge = '<span class="badge badge-success">可用</span>';
+    } else if (isCooldown) {
+      statusBadge = '<span class="badge badge-warning">冷却中(429)</span>';
+    } else {
+      statusBadge = '<span class="badge badge-danger">已禁用</span>';
+    }
+    const actionBtn = isActive || isCooldown
       ? `<button class="btn btn-danger btn-sm" onclick="disableModel('${escapeHtml(m.id)}')">禁用</button>`
       : `<button class="btn btn-success btn-sm" onclick="enableModel('${escapeHtml(m.id)}')">启用</button>`;
 
@@ -911,6 +1009,7 @@ async function loadConfig() {
     ['日志级别', data.log_level],
     ['日志保留', data.log_retention_days === 0 ? '永不清空' : data.log_retention_days + ' 天'],
     ['API Key', data.api_key_preview],
+    ['回复模型标识', data.show_model_tag ? '开启' : '关闭'],
   ].map(([k, v]) =>
     `<div class="config-item">
       <span class="config-key">${k}</span>
@@ -926,6 +1025,7 @@ async function loadConfig() {
   document.getElementById('cfgRefreshInterval').value = data.model_refresh_interval;
   document.getElementById('cfgLogLevel').value = data.log_level;
   document.getElementById('cfgLogRetention').value = data.log_retention_days;
+  document.getElementById('cfgShowModelTag').value = String(!!data.show_model_tag);
 
   // API 示例
   const host = window.location.host;
@@ -963,6 +1063,7 @@ async function saveConfig() {
     model_refresh_interval: parseInt(document.getElementById('cfgRefreshInterval').value),
     log_level: document.getElementById('cfgLogLevel').value,
     log_retention_days: parseInt(document.getElementById('cfgLogRetention').value),
+    show_model_tag: document.getElementById('cfgShowModelTag').value === 'true',
   };
 
   // API Key：只有在用户输入了新值时才提交
@@ -1023,6 +1124,64 @@ function toggleApiKeyVisibility() {
   } else {
     input.type = 'password';
     btn.textContent = '显示';
+  }
+}
+
+// ── Token 统计 ────────────────────────────────────────
+function _fmtNum(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+async function loadStats() {
+  const data = await api('/stats');
+  if (!data) return;
+
+  document.getElementById('statsTotalReq').textContent = _fmtNum(data.total_requests);
+  document.getElementById('statsTotalSuccess').textContent = _fmtNum(data.total_success);
+  document.getElementById('statsSuccessRate').textContent = `成功率 ${data.success_rate}%`;
+  document.getElementById('statsTotalErrors').textContent = _fmtNum(data.total_errors);
+  document.getElementById('statsTotalTokens').textContent = _fmtNum(data.total_tokens);
+  document.getElementById('statsTokenDetail').textContent =
+    `输入 ${_fmtNum(data.total_prompt_tokens)}  输出 ${_fmtNum(data.total_completion_tokens)}`;
+
+  // 按模型表格
+  const tbody = document.getElementById('statsModelTable');
+  if (!data.by_model || data.by_model.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无统计数据</td></tr>';
+  } else {
+    tbody.innerHTML = data.by_model.map(m => `<tr>
+      <td style="font-family:monospace;font-size:12px;word-break:break-all;">${escapeHtml(m.model_id)}</td>
+      <td>${m.requests}</td>
+      <td><span style="color:var(--success);">${m.success}</span></td>
+      <td><span style="color:var(--warning);">${m.errors_429}</span></td>
+      <td><span style="color:var(--danger);">${m.errors_4xx + m.errors_5xx}</span></td>
+      <td>${_fmtNum(m.prompt_tokens)}</td>
+      <td>${_fmtNum(m.completion_tokens)}</td>
+      <td style="font-weight:600;">${_fmtNum(m.total_tokens)}</td>
+    </tr>`).join('');
+  }
+
+  // 趋势表格
+  const trendTbody = document.getElementById('statsTrendTable');
+  if (!data.hourly_trend || data.hourly_trend.length === 0) {
+    trendTbody.innerHTML = '<tr><td colspan="3" class="empty-state">暂无趋势数据</td></tr>';
+  } else {
+    trendTbody.innerHTML = data.hourly_trend.slice().reverse().map(h => `<tr>
+      <td style="font-family:monospace;">${escapeHtml(h.hour)}</td>
+      <td>${h.requests}</td>
+      <td>${_fmtNum(h.tokens)}</td>
+    </tr>`).join('');
+  }
+}
+
+async function resetStats() {
+  if (!confirm('确定要重置所有统计数据吗？此操作不可恢复。')) return;
+  const data = await api('/stats/reset', { method: 'POST' });
+  if (data) {
+    toast(data.message, 'success');
+    loadStats();
   }
 }
 

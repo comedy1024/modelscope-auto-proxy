@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_retention_days: int = 30  # 日志保留天数，0 表示永不清空
 
+    # 回复头部模型标识（非 vibe coding 场景）
+    show_model_tag: bool = False  # True 时在回复文本开头注入 [模型名]
+
     # 管理后台认证
     admin_username: str = "admin"
     admin_password: str = ""  # 为空时启动时自动生成随机密码

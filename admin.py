@@ -20,6 +20,7 @@ from fastapi import APIRouter, Query, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from config import settings
 from model_manager import model_manager
+from stats import stats_collector
 
 logger = logging.getLogger("admin")
 
@@ -181,6 +182,7 @@ async def system_status(username: str = Depends(require_auth)):
             "total": status["total"],
             "active": status["active"],
             "disabled_today": status["disabled_today"],
+            "cooldown_count": status.get("cooldown_count", 0),
             "current_model": status.get("current_model"),
         },
         "refresh_interval": settings.model_refresh_interval,
@@ -379,6 +381,7 @@ async def get_config(username: str = Depends(require_auth)):
         "model_refresh_interval": settings.model_refresh_interval,
         "log_level": settings.log_level,
         "log_retention_days": settings.log_retention_days,
+        "show_model_tag": settings.show_model_tag,
         "api_key_set": bool(settings.modelscope_api_key),
         "api_key_preview": f"****{settings.modelscope_api_key[-4:]}" if len(settings.modelscope_api_key) >= 8 else "****",
         "admin_username": settings.admin_username,
@@ -395,6 +398,7 @@ async def update_config(config: dict, username: str = Depends(require_auth)):
         "virtual_model_name": str,
         "modelscope_api_key": str,
         "log_retention_days": int,
+        "show_model_tag": bool,
     }
 
     updated = {}
@@ -478,6 +482,7 @@ def _save_to_env(changes: dict):
         "modelscope_api_key": "MODELSCOPE_API_KEY",
         "admin_password": "ADMIN_PASSWORD",
         "log_retention_days": "LOG_RETENTION_DAYS",
+        "show_model_tag": "SHOW_MODEL_TAG",
     }
 
     for field, change in changes.items():
@@ -498,3 +503,18 @@ def record_start_time():
         json.dumps({"start_time": datetime.now().isoformat()}, ensure_ascii=False),
         encoding="utf-8",
     )
+
+
+# ── Token 使用量统计 ───────────────────────────────────
+@router.get("/api/stats")
+async def get_stats(username: str = Depends(require_auth)):
+    """获取 API 调用和 Token 使用量统计（需要认证）"""
+    return JSONResponse(content=stats_collector.get_summary())
+
+
+@router.post("/api/stats/reset")
+async def reset_stats(username: str = Depends(require_auth)):
+    """重置统计数据（需要认证）"""
+    stats_collector.reset()
+    logger.info(f"管理员 {username} 重置了统计数据")
+    return JSONResponse(content={"message": "统计数据已重置"})
