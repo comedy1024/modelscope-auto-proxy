@@ -43,6 +43,9 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 
 <img src="docs/admin-config.png" width="700" alt="管理后台 - 实时配置"/>
 <p><em>实时配置：在线修改参数，即时生效并持久化</em></p>
+
+<img src="docs/admin-stats.png" width="700" alt="管理后台 - Token 统计"/>
+<p><em>Token 统计：按模型统计请求数和 Token 用量</em></p>
 </div>
 
 ### 核心特性
@@ -54,7 +57,8 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 - 参数下限可配置（默认 4B 以上）
 
 **故障自动切换**
-- 遇到 400/500/502/503 错误自动标记并切换下一个模型
+- 遇到 400/404/500/502/503 错误自动标记并切换下一个模型
+- 遇到 429 限速立即给予短期冷却并切换模型，连续限速延长冷却时间
 - 全部不可用时返回 503，而不是挂起等待
 - 每日自动重置禁用状态
 
@@ -68,6 +72,7 @@ ModelScope 提供了大量免费的大模型 API-Inference 服务，但存在几
 - 用户名密码认证保护，防止未授权访问
 - 仪表盘：模型数量、运行状态、当前模型一目了然
 - 模型管理：手动启用/禁用模型
+- Token 统计：按模型统计请求数、成功率、Token 用量，24 小时趋势
 - 日志查看：实时日志、按级别过滤、关键词搜索、自动刷新
 - 配置管理：在线修改参数，即时生效并持久化
 
@@ -181,6 +186,7 @@ curl http://localhost:8000/v1/chat/completions \
 | `MODEL_REFRESH_INTERVAL` | 86400 | 模型列表刷新间隔（秒） |
 | `LOG_LEVEL` | INFO | 日志级别 |
 | `LOG_RETENTION_DAYS` | 30 | 日志保留天数（0 表示永不清空） |
+| `SHOW_MODEL_TAG` | false | 回复头部注入模型标识（开启后每条回复前加 [模型名]） |
 | `ADMIN_USERNAME` | admin | 管理后台用户名 |
 | `ADMIN_PASSWORD` | 自动生成 | 管理后台密码（为空时首次启动自动生成，见启动日志或 .env 文件） |
 
@@ -354,7 +360,7 @@ With just a free ModelScope account, you can use top-tier models like Qwen3-Code
 ### Key Features
 
 - **Smart Model Selection**: Automatically picks the best available model, sorted by parameter count
-- **Auto Failover**: Switches to the next model on 400/500 errors, with daily auto-reset
+- **Auto Failover**: Switches to the next model on 400/404/500 errors; 429 rate-limiting triggers short cooldown with auto-recovery; daily auto-reset
 - **OpenAI Compatible**: Drop-in replacement for OpenAI API — works with Cursor, Cline, Continue, Aider, etc.
 - **Coding-Optimized Filter**: Excludes vision/multimodal/reasoning-only/base models, keeps models suitable for code generation
 - **Web Admin Dashboard**: Built-in management UI at `/admin` with real-time logs, model management, and live config editing
@@ -384,6 +390,7 @@ Point your AI coding tool to `http://localhost:8000/v1` with model name `modelsc
 | `MODEL_REFRESH_INTERVAL` | 86400 | Model list refresh interval in seconds |
 | `LOG_LEVEL` | INFO | Log level |
 | `LOG_RETENTION_DAYS` | 30 | Log retention days (0 = never clean up) |
+| `SHOW_MODEL_TAG` | false | Inject model name tag in replies (e.g. [Kimi-K2.5]) |
 | `ADMIN_USERNAME` | admin | Admin dashboard username |
 | `ADMIN_PASSWORD` | auto-generated | Admin dashboard password (auto-generated on first start if empty; see logs or .env file) |
 

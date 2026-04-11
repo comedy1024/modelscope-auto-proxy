@@ -1,7 +1,7 @@
 """
 API 转发模块 — 将 OpenAI 兼容格式的请求转发到 ModelScope API-Inference。
 - 自动选择可用模型
-- 遇到 400/500 错误自动标记模型并切换下一个模型重试
+- 遇到 400/404/500 错误自动标记模型并切换下一个模型重试
 - 遇到 429 限速，切换下一个模型并累计计数，连续 N 次后临时冷却
 - 支持流式和非流式响应
 - 所有模型都不可用时返回 JSON 错误
@@ -146,7 +146,7 @@ async def _proxy_non_stream(
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, headers=headers, json=body)
 
-    if resp.status_code in (400, 500, 502, 503):
+    if resp.status_code in (400, 404, 500, 502, 503):
         error_msg = f"HTTP {resp.status_code}"
         try:
             error_detail = resp.json()
@@ -234,7 +234,7 @@ async def _proxy_stream(
         req = client.stream("POST", url, headers=headers, json=body)
         resp = await req.__aenter__()
 
-        if resp.status_code in (400, 500, 502, 503):
+        if resp.status_code in (400, 404, 500, 502, 503):
             error_body = await resp.aread()
             await req.__aexit__(None, None, None)
             await client.aclose()

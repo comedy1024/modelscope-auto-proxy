@@ -52,6 +52,10 @@ EXCLUDE_MODEL_IDS = {
     # 纯推理模型（思维链过长，编码体验差）
     "Qwen/QwQ-32B",
     "Qwen/QwQ-32B-Preview",
+    "deepseek-ai/DeepSeek-R1-0528",  # 推理模型，思维链极长，不适合 vibe coding
+    # 已知不可用模型（持续 400/404 错误）
+    "MiniMax/MiniMax-M1-80k",        # 持续返回 400 错误
+    "LLM-Research/Llama-4-Maverick-17B-128E-Instruct",  # 持续返回 404，模型可能已下线
 }
 
 # ── 已知模型参数量映射表 ─────────────────────────────────────
@@ -61,10 +65,8 @@ EXCLUDE_MODEL_IDS = {
 KNOWN_MODEL_PARAMS = {
     # DeepSeek 系列
     "deepseek-ai/DeepSeek-V3.2": (685.0, 37.0),     # MoE 685B 总参数, ~37B 激活
-    "deepseek-ai/DeepSeek-R1-0528": (685.0, 37.0),   # DeepSeek-R1 增强版, 同 V3 架构
     # MiniMax 系列
     "MiniMax/MiniMax-M2.5": (456.0, 45.0),           # MoE 456B 总参数
-    "MiniMax/MiniMax-M1-80k": (456.0, 45.0),         # M1 系列同架构
     # 智谱 GLM 系列
     "ZhipuAI/GLM-5": (744.0, 40.0),                  # MoE 744B 总参数, 40B 激活
     "ZhipuAI/GLM-4.7-Flash": (9.0, 9.0),             # GLM-4.7 Flash ~9B
@@ -84,8 +86,8 @@ KNOWN_MODEL_PARAMS = {
     "mistralai/Mistral-Small-Instruct-2409": (22.0, 22.0),    # Mistral Small 22B
     # Cohere
     "LLM-Research/c4ai-command-r-plus-08-2024": (104.0, 104.0),  # Command R+ 104B
-    # Meta Llama 4
-    "LLM-Research/Llama-4-Maverick-17B-128E-Instruct": (400.0, 17.0),  # MoE 400B/17B 激活
+    # Meta Llama 4 — Llama-4-Maverick 已下线(404)，仅保留映射以备重新上线
+    # "LLM-Research/Llama-4-Maverick-17B-128E-Instruct": (400.0, 17.0),
 }
 
 

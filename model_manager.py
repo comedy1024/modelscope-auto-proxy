@@ -1,8 +1,9 @@
 """
 模型管理模块 — 管理可用模型列表、故障标记、自动刷新。
 - 每天定时刷新模型列表
-- 当某个模型返回 400/500 错误时，标记为今日不可用
-- 当某个模型连续 429 超过阈值时，临时冷却 1 小时后自动恢复
+- 当某个模型返回 400/404/500 错误时，标记为今日不可用
+- 当某个模型遇到 429 限速时，立即给予短期冷却（避免重复选中）
+- 连续 429 超过阈值时，延长冷却时间
 - 自动切换到下一个可用模型
 - 所有模型都不可用时返回错误
 """
@@ -16,10 +17,12 @@ from model_fetcher import get_filtered_models
 
 logger = logging.getLogger("model_manager")
 
-# 连续 429 超过此次数，触发临时冷却
+# 连续 429 超过此次数，触发延长冷却
 _429_THRESHOLD = 3
-# 临时冷却时长（秒）
-_429_COOLDOWN_SECS = 3600  # 1 小时
+# 首次 429 冷却时长（秒）— 2 分钟，避免短期内重复选中
+_429_COOLDOWN_SECS = 120
+# 连续 429 阈值触发后的延长冷却时长（秒）— 10 分钟
+_429_EXTENDED_COOLDOWN_SECS = 600
 
 
 class ModelManager:
@@ -146,46 +149,43 @@ class ModelManager:
 
     def mark_429(self, model_id: str) -> bool:
         """
-        记录 429 限速，累计超过阈值则触发临时冷却并切换模型。
-        返回 True 表示已触发切换，False 表示仅累计未切换。
+        记录 429 限速，立即给予短期冷却并切换模型。
+        首次 429: 2 分钟冷却（避免短期内重复选中同一个被限速的模型）
+        连续 N 次 429: 10 分钟冷却（该模型可能持续限速）
+        返回 True 表示已触发延长冷却，False 表示仅短期冷却。
         """
         with self._lock:
             count = self._429_count.get(model_id, 0) + 1
             self._429_count[model_id] = count
 
             if count >= _429_THRESHOLD:
-                # 触发冷却
-                cooldown_until = datetime.now() + timedelta(seconds=_429_COOLDOWN_SECS)
-                self._cooldown[model_id] = cooldown_until
+                # 连续多次 429，延长冷却
+                cooldown_secs = _429_EXTENDED_COOLDOWN_SECS
                 self._429_count.pop(model_id, None)
-
-                # 切换到下一个可用模型
-                for i in range(1, len(self._models)):
-                    next_idx = (self._current_index + i) % len(self._models)
-                    next_model = self._models[next_idx]
-                    if self._is_available(next_model["id"]):
-                        self._current_index = next_idx
-                        break
-
-                remaining = sum(1 for m in self._models if self._is_available(m["id"]))
-                logger.warning(
-                    f"模型 {model_id} 连续 {count} 次 429，触发冷却 {_429_COOLDOWN_SECS//60} 分钟，"
-                    f"切换到下一个模型，剩余可用: {remaining}/{len(self._models)}"
-                )
-                return True
             else:
-                # 尚未达到阈值，也先切换（避免继续打同一个被限速的模型）
-                for i in range(1, len(self._models)):
-                    next_idx = (self._current_index + i) % len(self._models)
-                    next_model = self._models[next_idx]
-                    if self._is_available(next_model["id"]):
-                        self._current_index = next_idx
-                        break
+                # 首次/前几次 429，短期冷却
+                cooldown_secs = _429_COOLDOWN_SECS
 
-                logger.warning(
-                    f"模型 {model_id} 遭遇 429 (第 {count}/{_429_THRESHOLD} 次)，切换到下一个模型"
-                )
-                return False
+            cooldown_until = datetime.now() + timedelta(seconds=cooldown_secs)
+            self._cooldown[model_id] = cooldown_until
+
+            # 切换到下一个可用模型
+            for i in range(1, len(self._models)):
+                next_idx = (self._current_index + i) % len(self._models)
+                next_model = self._models[next_idx]
+                if self._is_available(next_model["id"]):
+                    self._current_index = next_idx
+                    break
+
+            remaining = sum(1 for m in self._models if self._is_available(m["id"]))
+            is_extended = count >= _429_THRESHOLD
+
+            logger.warning(
+                f"模型 {model_id} 遭遇 429 (第 {count}/{_429_THRESHOLD} 次)，"
+                f"冷却 {cooldown_secs // 60} 分钟，切换到下一个模型，"
+                f"剩余可用: {remaining}/{len(self._models)}"
+            )
+            return is_extended
 
     def reset_429(self, model_id: str):
         """模型成功响应后，重置其 429 计数"""

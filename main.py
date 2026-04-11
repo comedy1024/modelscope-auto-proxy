@@ -122,7 +122,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ModelScope API 转换器",
     description="自动切换 ModelScope 可用模型的 API 代理",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -185,7 +185,7 @@ async def api_info():
     """API 信息端点（供程序化访问）"""
     return JSONResponse(content={
         "service": "ModelScope API 转换器",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "virtual_model": settings.virtual_model_name,
         "status": "/v1/status",
         "models": "/v1/models",

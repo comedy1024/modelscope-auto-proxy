@@ -174,7 +174,7 @@ async def system_status(username: str = Depends(require_auth)):
     status = model_manager.get_status()
     return JSONResponse(content={
         "service": "ModelScope API 转换器",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "uptime": _get_uptime(),
         "virtual_model": settings.virtual_model_name,
         "proxy_port": settings.proxy_port,

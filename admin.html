@@ -416,12 +416,12 @@ tr:hover td { background: var(--bg-hover); }
       <div class="stat-card">
         <div class="stat-label">已禁用</div>
         <div class="stat-value text-danger" id="statDisabled">-</div>
-        <div class="stat-sub">今日 400/500 错误</div>
+        <div class="stat-sub">今日 400/404/500 错误</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">冷却中</div>
         <div class="stat-value text-warning" id="statCooldown">-</div>
-        <div class="stat-sub">429 限速冷却 1h</div>
+        <div class="stat-sub">429 限速冷却</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">当前模型</div>
@@ -841,8 +841,10 @@ async function loadModels() {
       statusBadge = '<span class="badge badge-success">可用</span>';
     } else if (isCooldown) {
       statusBadge = '<span class="badge badge-warning">冷却中(429)</span>';
-    } else {
+    } else if (isDisabled) {
       statusBadge = '<span class="badge badge-danger">已禁用</span>';
+    } else {
+      statusBadge = '<span class="badge badge-danger">不可用</span>';
     }
     const actionBtn = isActive || isCooldown
       ? `<button class="btn btn-danger btn-sm" onclick="disableModel('${escapeHtml(m.id)}')">禁用</button>`
