@@ -1,11 +1,17 @@
 """
 模型管理模块 — 管理可用模型列表、故障标记、自动刷新。
 - 每天定时刷新模型列表
-- 当某个模型返回 400/404/500 错误时，标记为今日不可用
+- 当某个模型返回 404/500 错误时，标记为今日不可用
+- 当某个模型返回 400 时，给予短期冷却（可能是临时兼容问题）
 - 当某个模型遇到 429 限速时，立即给予短期冷却（避免重复选中）
-- 连续 429 超过阈值时，延长冷却时间
+- 连续 429 超过阈值时，视为每日额度耗尽，标记为今日不可用
 - 自动切换到下一个可用模型
 - 所有模型都不可用时返回错误
+
+魔搭 API 限流规则参考:
+- 每账号 2000 次/天，每模型 500 次/天（可能动态调整至 100 次）
+- 存在未公开的短时 QPM/并发限制，大模型更严格
+- 429 可能是短时频率超限（短暂冷却即可恢复）或每日额度用完（需等到 0 点重置）
 """
 import json
 import logging
@@ -17,12 +23,12 @@ from model_fetcher import get_filtered_models
 
 logger = logging.getLogger("model_manager")
 
-# 连续 429 超过此次数，触发延长冷却
+# 连续 429 超过此次数，视为每日额度耗尽，标记为今日不可用
 _429_THRESHOLD = 3
 # 首次 429 冷却时长（秒）— 2 分钟，避免短期内重复选中
 _429_COOLDOWN_SECS = 120
-# 连续 429 阈值触发后的延长冷却时长（秒）— 10 分钟
-_429_EXTENDED_COOLDOWN_SECS = 600
+# 400 错误冷却时长（秒）— 5 分钟，可能是临时兼容问题
+_400_COOLDOWN_SECS = 300
 
 
 class ModelManager:
@@ -123,12 +129,12 @@ class ModelManager:
             return None
 
     def mark_disabled(self, model_id: str, reason: str = ""):
-        """将模型标记为今日不可用（400/500 类永久性故障）"""
+        """将模型标记为今日不可用（404/500 类永久性故障）"""
         with self._lock:
             today = date.today()
             self._disabled[model_id] = today
 
-            # 同时清除429计数
+            # 同时清除429计数和冷却
             self._429_count.pop(model_id, None)
             self._cooldown.pop(model_id, None)
 
@@ -147,26 +153,10 @@ class ModelManager:
             f"剩余可用模型: {remaining}/{len(self._models)}"
         )
 
-    def mark_429(self, model_id: str) -> bool:
-        """
-        记录 429 限速，立即给予短期冷却并切换模型。
-        首次 429: 2 分钟冷却（避免短期内重复选中同一个被限速的模型）
-        连续 N 次 429: 10 分钟冷却（该模型可能持续限速）
-        返回 True 表示已触发延长冷却，False 表示仅短期冷却。
-        """
+    def mark_cooldown(self, model_id: str, reason: str = ""):
+        """将模型标记为短期冷却（400 等可能是临时兼容问题，不应永久禁用）"""
         with self._lock:
-            count = self._429_count.get(model_id, 0) + 1
-            self._429_count[model_id] = count
-
-            if count >= _429_THRESHOLD:
-                # 连续多次 429，延长冷却
-                cooldown_secs = _429_EXTENDED_COOLDOWN_SECS
-                self._429_count.pop(model_id, None)
-            else:
-                # 首次/前几次 429，短期冷却
-                cooldown_secs = _429_COOLDOWN_SECS
-
-            cooldown_until = datetime.now() + timedelta(seconds=cooldown_secs)
+            cooldown_until = datetime.now() + timedelta(seconds=_400_COOLDOWN_SECS)
             self._cooldown[model_id] = cooldown_until
 
             # 切换到下一个可用模型
@@ -178,14 +168,60 @@ class ModelManager:
                     break
 
             remaining = sum(1 for m in self._models if self._is_available(m["id"]))
-            is_extended = count >= _429_THRESHOLD
 
-            logger.warning(
-                f"模型 {model_id} 遭遇 429 (第 {count}/{_429_THRESHOLD} 次)，"
-                f"冷却 {cooldown_secs // 60} 分钟，切换到下一个模型，"
-                f"剩余可用: {remaining}/{len(self._models)}"
-            )
-            return is_extended
+        logger.warning(
+            f"模型 {model_id} 给予 {_400_COOLDOWN_SECS // 60} 分钟冷却 (原因: {reason})，"
+            f"剩余可用模型: {remaining}/{len(self._models)}"
+        )
+
+    def mark_429(self, model_id: str) -> bool:
+        """
+        记录 429 限速，立即给予短期冷却并切换模型。
+        首次 429: 2 分钟冷却（避免短期内重复选中同一个被限速的模型）
+        连续 N 次 429: 视为每日额度耗尽，标记为今日不可用（需等到 0 点重置）
+        返回 True 表示已触发今日禁用，False 表示仅短期冷却。
+        """
+        with self._lock:
+            count = self._429_count.get(model_id, 0) + 1
+            self._429_count[model_id] = count
+
+            if count >= _429_THRESHOLD:
+                # 连续多次 429，视为每日额度耗尽，标记为今日不可用
+                today = date.today()
+                self._disabled[model_id] = today
+                self._429_count.pop(model_id, None)
+                self._cooldown.pop(model_id, None)
+
+                remaining = sum(1 for m in self._models if self._is_available(m["id"]))
+                is_disabled = True
+
+                logger.warning(
+                    f"模型 {model_id} 连续 {count} 次 429，视为每日额度耗尽，标记为今日不可用，"
+                    f"剩余可用模型: {remaining}/{len(self._models)}"
+                )
+            else:
+                # 首次/前几次 429，短期冷却
+                cooldown_until = datetime.now() + timedelta(seconds=_429_COOLDOWN_SECS)
+                self._cooldown[model_id] = cooldown_until
+                is_disabled = False
+
+                remaining = sum(1 for m in self._models if self._is_available(m["id"]))
+
+                logger.warning(
+                    f"模型 {model_id} 遭遇 429 (第 {count}/{_429_THRESHOLD} 次)，"
+                    f"冷却 {_429_COOLDOWN_SECS // 60} 分钟，切换到下一个模型，"
+                    f"剩余可用: {remaining}/{len(self._models)}"
+                )
+
+            # 切换到下一个可用模型
+            for i in range(1, len(self._models)):
+                next_idx = (self._current_index + i) % len(self._models)
+                next_model = self._models[next_idx]
+                if self._is_available(next_model["id"]):
+                    self._current_index = next_idx
+                    break
+
+            return is_disabled
 
     def reset_429(self, model_id: str):
         """模型成功响应后，重置其 429 计数"""

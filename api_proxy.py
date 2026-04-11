@@ -1,8 +1,9 @@
 """
 API 转发模块 — 将 OpenAI 兼容格式的请求转发到 ModelScope API-Inference。
 - 自动选择可用模型
-- 遇到 400/404/500 错误自动标记模型并切换下一个模型重试
-- 遇到 429 限速，切换下一个模型并累计计数，连续 N 次后临时冷却
+- 遇到 404/500 错误自动标记模型为今日不可用并切换下一个模型重试
+- 遇到 400 错误给予短期冷却（可能是临时兼容问题，非永久故障）
+- 遇到 429 限速，切换下一个模型；连续 N 次后视为每日额度耗尽，标记今日不可用
 - 支持流式和非流式响应
 - 所有模型都不可用时返回 JSON 错误
 - 最大重试次数限制，防止无限递归
@@ -146,7 +147,7 @@ async def _proxy_non_stream(
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, headers=headers, json=body)
 
-    if resp.status_code in (400, 404, 500, 502, 503):
+    if resp.status_code in (404, 500, 502, 503):
         error_msg = f"HTTP {resp.status_code}"
         try:
             error_detail = resp.json()
@@ -154,9 +155,23 @@ async def _proxy_non_stream(
         except Exception:
             error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
 
-        logger.warning(f"模型 {model_id} 返回错误: {error_msg}，切换下一个")
+        logger.warning(f"模型 {model_id} 返回不可恢复错误: {error_msg}，标记为今日不可用")
         stats_collector.record_error(model_id, resp.status_code)
         model_manager.mark_disabled(model_id, error_msg)
+        return await proxy_chat_completions(request, retry_count + 1)
+
+    # 400 — 可能是临时兼容问题，给予短期冷却而非永久禁用
+    if resp.status_code == 400:
+        error_msg = f"HTTP 400"
+        try:
+            error_detail = resp.json()
+            error_msg = f"HTTP 400: {json.dumps(error_detail, ensure_ascii=False)[:300]}"
+        except Exception:
+            error_msg = f"HTTP 400: {resp.text[:200]}"
+
+        logger.warning(f"模型 {model_id} 返回 400 错误: {error_msg}，给予短期冷却")
+        stats_collector.record_error(model_id, 400)
+        model_manager.mark_cooldown(model_id, error_msg)
         return await proxy_chat_completions(request, retry_count + 1)
 
     # 429 — 限速，切换模型重试
@@ -234,14 +249,25 @@ async def _proxy_stream(
         req = client.stream("POST", url, headers=headers, json=body)
         resp = await req.__aenter__()
 
-        if resp.status_code in (400, 404, 500, 502, 503):
+        if resp.status_code in (404, 500, 502, 503):
             error_body = await resp.aread()
             await req.__aexit__(None, None, None)
             await client.aclose()
             error_msg = f"HTTP {resp.status_code}: {error_body.decode('utf-8', errors='replace')[:200]}"
-            logger.warning(f"模型 {model_id} 流式请求错误: {error_msg}，切换下一个")
+            logger.warning(f"模型 {model_id} 流式请求不可恢复错误: {error_msg}，标记为今日不可用")
             stats_collector.record_error(model_id, resp.status_code)
             model_manager.mark_disabled(model_id, error_msg)
+            return await proxy_chat_completions(request, retry_count + 1)
+
+        # 400 — 可能是临时兼容问题，给予短期冷却
+        if resp.status_code == 400:
+            error_body = await resp.aread()
+            await req.__aexit__(None, None, None)
+            await client.aclose()
+            error_msg = f"HTTP 400: {error_body.decode('utf-8', errors='replace')[:200]}"
+            logger.warning(f"模型 {model_id} 流式请求 400 错误: {error_msg}，给予短期冷却")
+            stats_collector.record_error(model_id, 400)
+            model_manager.mark_cooldown(model_id, error_msg)
             return await proxy_chat_completions(request, retry_count + 1)
 
         # 429 — 限速，切换模型重试

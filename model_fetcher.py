@@ -53,9 +53,8 @@ EXCLUDE_MODEL_IDS = {
     "Qwen/QwQ-32B",
     "Qwen/QwQ-32B-Preview",
     "deepseek-ai/DeepSeek-R1-0528",  # 推理模型，思维链极长，不适合 vibe coding
-    # 已知不可用模型（持续 400/404 错误）
-    "MiniMax/MiniMax-M1-80k",        # 持续返回 400 错误
-    "LLM-Research/Llama-4-Maverick-17B-128E-Instruct",  # 持续返回 404，模型可能已下线
+    # 已知不可用模型（持续 404 错误，模型已下线）
+    "LLM-Research/Llama-4-Maverick-17B-128E-Instruct",  # 持续返回 404，模型已下线
 }
 
 # ── 已知模型参数量映射表 ─────────────────────────────────────
