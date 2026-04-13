@@ -481,6 +481,25 @@ tr:hover td { background: var(--bg-hover); }
   <div class="tab-content" id="tab-models">
     <div class="card">
       <div class="card-header">
+        <div class="card-title">添加模型</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:2;min-width:240px;margin-bottom:0;">
+          <label class="form-label">模型 ID</label>
+          <input class="form-input" id="addModelId" placeholder="如: Qwen/Qwen2.5-72B-Instruct">
+          <div class="form-hint">输入 ModelScope 上的完整模型 ID，自动解析参数量</div>
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0;">
+          <label class="form-label">参数量 (B)</label>
+          <input class="form-input" id="addModelParamB" type="number" min="0" step="0.1" placeholder="自动检测">
+          <div class="form-hint">可选，留空自动检测</div>
+        </div>
+        <button class="btn btn-primary" onclick="addCustomModel()" style="height:36px;">添加</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="card-title">模型列表</div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-primary btn-sm" onclick="refreshModels()">刷新列表</button>
@@ -510,6 +529,21 @@ tr:hover td { background: var(--bg-hover); }
         <div class="card-title">被禁用的模型</div>
       </div>
       <div id="disabledList" class="empty-state">暂无被禁用的模型</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">自定义添加的模型</div>
+      </div>
+      <div id="customIncludeList" class="empty-state">暂无自定义添加的模型</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">已屏蔽的模型</div>
+        <div class="form-hint" style="margin:0;">屏蔽后模型不会出现在可用列表中，刷新模型列表也不会恢复</div>
+      </div>
+      <div id="customExcludeList" class="empty-state">暂无屏蔽的模型</div>
     </div>
   </div>
 
@@ -608,6 +642,7 @@ tr:hover td { background: var(--bg-hover); }
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadLogs()">刷新</button>
         <button class="btn btn-outline btn-sm" id="autoRefreshBtn" onclick="toggleAutoRefresh()">自动刷新: 关</button>
+        <button class="btn btn-danger btn-sm" onclick="clearCurrentLog()">清空当前日志</button>
         <span style="margin-left:auto;font-size:12px;color:var(--text-muted);" id="logCount"></span>
       </div>
       <div class="log-viewer" id="logViewer">加载中...</div>
@@ -747,7 +782,7 @@ async function api(path, opts = {}) {
       window.location.href = '/admin/login';
       return null;
     }
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast(data.error || data.detail || `请求失败 (${res.status})`, 'error');
       return null;
@@ -836,6 +871,7 @@ async function loadModels() {
     const isActive = m.is_active;
     const isCooldown = m.is_cooldown;
     const isDisabled = m.is_disabled;
+    const isCustom = m.is_custom;
     let statusBadge;
     if (isActive) {
       statusBadge = '<span class="badge badge-success">可用</span>';
@@ -846,16 +882,26 @@ async function loadModels() {
     } else {
       statusBadge = '<span class="badge badge-danger">不可用</span>';
     }
-    const actionBtn = isActive || isCooldown
-      ? `<button class="btn btn-danger btn-sm" onclick="disableModel('${escapeHtml(m.id)}')">禁用</button>`
-      : `<button class="btn btn-success btn-sm" onclick="enableModel('${escapeHtml(m.id)}')">启用</button>`;
+    if (isCustom) {
+      statusBadge += ' <span class="badge badge-info">手动添加</span>';
+    }
+    const actionBtns = [];
+    if (isActive || isCooldown) {
+      actionBtns.push(`<button class="btn btn-danger btn-sm" onclick="disableModel('${escapeHtml(m.id)}')">禁用</button>`);
+      actionBtns.push(`<button class="btn btn-warning btn-sm" onclick="blockModel('${escapeHtml(m.id)}')">屏蔽</button>`);
+    } else {
+      actionBtns.push(`<button class="btn btn-success btn-sm" onclick="enableModel('${escapeHtml(m.id)}')">启用</button>`);
+    }
+    if (isCustom) {
+      actionBtns.push(`<button class="btn btn-outline btn-sm" onclick="removeCustomModel('${escapeHtml(m.id)}')">移除</button>`);
+    }
 
     return `<tr>
       <td>${i + 1}</td>
       <td style="font-family:monospace;font-size:12px;word-break:break-all;">${escapeHtml(m.id)}</td>
       <td>${m.param_b ? m.param_b + 'B' : '-'}</td>
       <td>${statusBadge}</td>
-      <td>${actionBtn}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns.join('')}</td>
     </tr>`;
   }).join('');
 
@@ -873,6 +919,35 @@ async function loadModels() {
     ).join('');
   } else {
     disabledDiv.innerHTML = '<div class="empty-state">暂无被禁用的模型</div>';
+  }
+
+  // 自定义添加的模型列表
+  const customIncludeDiv = document.getElementById('customIncludeList');
+  if (data.custom_include && data.custom_include.length > 0) {
+    customIncludeDiv.innerHTML = data.custom_include.map(m =>
+      `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <span style="font-family:monospace;font-size:13px;">${escapeHtml(m.id)}</span>
+          <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">${m.param_b ? m.param_b + 'B' : '-'}</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="removeCustomModel('${escapeHtml(m.id)}')">移除</button>
+      </div>`
+    ).join('');
+  } else {
+    customIncludeDiv.innerHTML = '<div class="empty-state">暂无自定义添加的模型</div>';
+  }
+
+  // 已屏蔽的模型列表
+  const customExcludeDiv = document.getElementById('customExcludeList');
+  if (data.custom_exclude && data.custom_exclude.length > 0) {
+    customExcludeDiv.innerHTML = data.custom_exclude.map(id =>
+      `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="font-family:monospace;font-size:13px;">${escapeHtml(id)}</span>
+        <button class="btn btn-success btn-sm" onclick="unblockModel('${escapeHtml(id)}')">解除屏蔽</button>
+      </div>`
+    ).join('');
+  } else {
+    customExcludeDiv.innerHTML = '<div class="empty-state">暂无屏蔽的模型</div>';
   }
 }
 
@@ -908,6 +983,61 @@ async function resetDisabled() {
     toast(data.message, 'success');
     loadDashboard();
     loadModels();
+  }
+}
+
+async function addCustomModel() {
+  const modelId = document.getElementById('addModelId').value.trim();
+  if (!modelId) { toast('请输入模型 ID', 'error'); return; }
+
+  const paramB = parseFloat(document.getElementById('addModelParamB').value) || 0;
+  const data = await api('/models/add', {
+    method: 'POST',
+    body: JSON.stringify({ model_id: modelId, param_b: paramB }),
+  });
+  if (data) {
+    toast(data.message, 'success');
+    document.getElementById('addModelId').value = '';
+    document.getElementById('addModelParamB').value = '';
+    loadModels();
+    loadDashboard();
+  }
+}
+
+async function blockModel(modelId) {
+  if (!confirm(`确定要屏蔽模型 ${modelId} 吗？屏蔽后该模型不会出现在可用列表中。`)) return;
+  const data = await api('/models/block', {
+    method: 'POST',
+    body: JSON.stringify({ model_id: modelId }),
+  });
+  if (data) {
+    toast(data.message, 'success');
+    loadModels();
+    loadDashboard();
+  }
+}
+
+async function unblockModel(modelId) {
+  const data = await api('/models/unblock', {
+    method: 'POST',
+    body: JSON.stringify({ model_id: modelId }),
+  });
+  if (data) {
+    toast(data.message, 'success');
+    loadModels();
+  }
+}
+
+async function removeCustomModel(modelId) {
+  if (!confirm(`确定要移除自定义添加的模型 ${modelId} 吗？`)) return;
+  const data = await api('/models/remove-custom', {
+    method: 'POST',
+    body: JSON.stringify({ model_id: modelId }),
+  });
+  if (data) {
+    toast(data.message, 'success');
+    loadModels();
+    loadDashboard();
   }
 }
 
@@ -978,18 +1108,44 @@ async function loadLogFiles() {
     return;
   }
 
-  container.innerHTML = data.files.map(f =>
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+  container.innerHTML = data.files.map(f => {
+    const isCurrentLog = f.name === 'modelscope-proxy.log';
+    const deleteBtn = isCurrentLog
+      ? '' // 当前活跃日志不显示删除按钮（只能清空）
+      : `<button class="btn btn-danger btn-sm" onclick="deleteLogFile('${escapeHtml(f.name)}')">删除</button>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
       <div>
         <span style="font-family:monospace;font-size:13px;">${escapeHtml(f.name)}</span>
+        ${isCurrentLog ? '<span class="badge badge-info" style="margin-left:6px;">当前</span>' : ''}
         <span style="font-size:12px;color:var(--text-muted);margin-left:12px;">${formatBytes(f.size)}</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:12px;color:var(--text-muted);">${f.modified}</span>
         <a href="/admin/api/logs/download/${encodeURIComponent(f.name)}" class="btn btn-outline btn-sm" download>下载</a>
+        ${deleteBtn}
       </div>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
+}
+
+async function clearCurrentLog() {
+  if (!confirm('确定要清空当前日志文件内容吗？此操作不可恢复。')) return;
+  const data = await api('/logs', { method: 'DELETE' });
+  if (data) {
+    toast(data.message, 'success');
+    loadLogs();
+    loadLogFiles();
+  }
+}
+
+async function deleteLogFile(filename) {
+  if (!confirm(`确定要删除日志文件 ${filename} 吗？此操作不可恢复。`)) return;
+  const data = await api(`/logs/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+  if (data) {
+    toast(data.message, 'success');
+    loadLogFiles();
+    loadLogs();
+  }
 }
 
 // ── 配置管理 ────────────────────────────────────────

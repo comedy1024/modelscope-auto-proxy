@@ -174,7 +174,7 @@ async def system_status(username: str = Depends(require_auth)):
     status = model_manager.get_status()
     return JSONResponse(content={
         "service": "ModelScope API 转换器",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "uptime": _get_uptime(),
         "virtual_model": settings.virtual_model_name,
         "proxy_port": settings.proxy_port,
@@ -249,6 +249,71 @@ async def disable_model(data: dict, username: str = Depends(require_auth)):
         return JSONResponse(content={"error": "model_id is required"}, status_code=400)
     model_manager.mark_disabled(model_id, "管理员手动禁用")
     return JSONResponse(content={"message": f"模型 {model_id} 已禁用"})
+
+
+# ── 自定义添加/屏蔽模型 ───────────────────────────────
+@router.get("/api/models/custom")
+async def get_custom_models(username: str = Depends(require_auth)):
+    """获取自定义添加和屏蔽的模型列表（需要认证）"""
+    return JSONResponse(content=model_manager.get_custom_models())
+
+
+@router.post("/api/models/add")
+async def add_custom_model(data: dict, username: str = Depends(require_auth)):
+    """手动添加一个模型到可用列表（需要认证）"""
+    model_id = data.get("model_id", "").strip()
+    if not model_id:
+        return JSONResponse(content={"error": "model_id 不能为空"}, status_code=400)
+
+    param_b = float(data.get("param_b", 0))
+    result = model_manager.add_custom_model(model_id, param_b)
+
+    if result.get("already_exists"):
+        return JSONResponse(content=result, status_code=200)
+    if result.get("blocked"):
+        return JSONResponse(content={"error": result["message"]}, status_code=400)
+
+    logger.info(f"管理员 {username} 添加了模型: {model_id}")
+    return JSONResponse(content=result)
+
+
+@router.post("/api/models/block")
+async def block_model(data: dict, username: str = Depends(require_auth)):
+    """手动屏蔽一个模型（需要认证）"""
+    model_id = data.get("model_id", "").strip()
+    if not model_id:
+        return JSONResponse(content={"error": "model_id 不能为空"}, status_code=400)
+
+    result = model_manager.block_model(model_id)
+    logger.info(f"管理员 {username} 屏蔽了模型: {model_id}")
+    return JSONResponse(content=result)
+
+
+@router.post("/api/models/unblock")
+async def unblock_model(data: dict, username: str = Depends(require_auth)):
+    """解除屏蔽一个模型（需要认证）"""
+    model_id = data.get("model_id", "").strip()
+    if not model_id:
+        return JSONResponse(content={"error": "model_id 不能为空"}, status_code=400)
+
+    result = model_manager.unblock_model(model_id)
+    logger.info(f"管理员 {username} 解除屏蔽模型: {model_id}")
+    return JSONResponse(content=result)
+
+
+@router.post("/api/models/remove-custom")
+async def remove_custom_model(data: dict, username: str = Depends(require_auth)):
+    """移除手动添加的模型（需要认证）"""
+    model_id = data.get("model_id", "").strip()
+    if not model_id:
+        return JSONResponse(content={"error": "model_id 不能为空"}, status_code=400)
+
+    result = model_manager.remove_custom_model(model_id)
+    if result.get("not_custom"):
+        return JSONResponse(content={"error": result["message"]}, status_code=400)
+
+    logger.info(f"管理员 {username} 移除了自定义模型: {model_id}")
+    return JSONResponse(content=result)
 
 
 @router.post("/api/refresh")
@@ -341,6 +406,44 @@ async def download_log(filename: str, username: str = Depends(require_auth)):
     return PlainTextResponse(content=content, headers={
         "Content-Disposition": f"attachment; filename={filename}"
     })
+
+
+@router.delete("/api/logs/{filename}")
+async def delete_log(filename: str, username: str = Depends(require_auth)):
+    """删除日志文件（需要认证）"""
+    # 安全检查：防止路径遍历
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return JSONResponse(content={"error": "非法文件名"}, status_code=400)
+
+    # 不允许删除当前活跃的日志文件
+    if filename == "modelscope-proxy.log":
+        return JSONResponse(content={"error": "不能删除当前活跃的日志文件"}, status_code=400)
+
+    log_file = settings.log_dir / filename
+    if not log_file.exists():
+        return JSONResponse(content={"error": "文件不存在"}, status_code=404)
+
+    try:
+        log_file.unlink()
+        logger.info(f"管理员 {username} 删除了日志文件: {filename}")
+        return JSONResponse(content={"message": f"日志文件 {filename} 已删除"})
+    except Exception as e:
+        return JSONResponse(content={"error": f"删除失败: {e}"}, status_code=500)
+
+
+@router.delete("/api/logs")
+async def clear_current_log(username: str = Depends(require_auth)):
+    """清空当前活跃日志文件内容（需要认证）"""
+    log_file = settings.log_dir / "modelscope-proxy.log"
+    if not log_file.exists():
+        return JSONResponse(content={"error": "日志文件不存在"}, status_code=404)
+
+    try:
+        log_file.write_text("", encoding="utf-8")
+        logger.info(f"管理员 {username} 清空了当前日志")
+        return JSONResponse(content={"message": "当前日志已清空"})
+    except Exception as e:
+        return JSONResponse(content={"error": f"清空失败: {e}"}, status_code=500)
 
 
 # ── 密码修改 ──────────────────────────────────────────

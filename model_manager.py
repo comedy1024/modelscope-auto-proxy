@@ -42,6 +42,13 @@ class ModelManager:
         self._429_count: dict[str, int] = {}    # model_id -> 连续 429 次数
         self._current_index: int = 0            # 当前使用的模型索引
         self._cache_file: Path = settings.data_dir / "model_cache.json"
+        self._custom_file: Path = settings.data_dir / "custom_models.json"
+        # 自定义添加的模型（不在自动筛选结果中，用户手动添加）
+        self._custom_include: list[dict] = []   # [{"id": "xxx/yyy", "param_b": 72.0}, ...]
+        # 自定义屏蔽的模型（在自动筛选结果中，用户手动屏蔽）
+        self._custom_exclude: set[str] = set()  # {"xxx/yyy", ...}
+        # 加载自定义配置
+        self._load_custom()
 
     @property
     def models(self) -> list[dict]:
@@ -64,7 +71,7 @@ class ModelManager:
         return True
 
     def refresh_models(self):
-        """刷新模型列表（每天定时调用）"""
+        """刷新模型列表（每天定时调用），合并自定义添加/屏蔽"""
         logger.info("开始刷新模型列表...")
 
         new_models = get_filtered_models()
@@ -73,11 +80,30 @@ class ModelManager:
             return
 
         with self._lock:
+            # 应用自定义屏蔽：移除被用户屏蔽的模型
+            if self._custom_exclude:
+                before = len(new_models)
+                new_models = [m for m in new_models if m["id"] not in self._custom_exclude]
+                removed = before - len(new_models)
+                if removed > 0:
+                    logger.info(f"自定义屏蔽移除了 {removed} 个模型")
+
+            # 应用自定义添加：追加用户手动添加的模型（避免重复）
+            existing_ids = {m["id"] for m in new_models}
+            for cm in self._custom_include:
+                if cm["id"] not in existing_ids:
+                    new_models.append(cm)
+                    existing_ids.add(cm["id"])
+                    logger.info(f"自定义添加模型: {cm['id']} ({cm.get('param_b', '?')}B)")
+
+            # 重新按参数量排序
+            new_models.sort(key=lambda x: x["param_b"], reverse=True)
+
             old_ids = {m["id"] for m in self._models}
             new_ids = {m["id"] for m in new_models}
 
             added = new_ids - old_ids
-            removed = old_ids - new_ids
+            removed_ids = old_ids - new_ids
 
             self._models = new_models
             self._current_index = 0
@@ -100,8 +126,8 @@ class ModelManager:
 
         if added:
             logger.info(f"新增模型: {added}")
-        if removed:
-            logger.info(f"移除模型: {removed}")
+        if removed_ids:
+            logger.info(f"移除模型: {removed_ids}")
 
         logger.info(f"模型列表已刷新，共 {len(new_models)} 个模型")
 
@@ -264,12 +290,16 @@ class ModelManager:
                 "current_model": current,
                 "disabled_list": disabled,
                 "cooldown_list": cooldown_list,
+                "custom_include": list(self._custom_include),
+                "custom_exclude": list(self._custom_exclude),
                 "models": [
                     {
                         **m,
                         "is_active": self._is_available(m["id"]),
                         "is_cooldown": m["id"] in self._cooldown and self._cooldown[m["id"]] > now,
                         "is_disabled": m["id"] in self._disabled,
+                        "is_custom": m["id"] in {c["id"] for c in self._custom_include},
+                        "is_blocked": m["id"] in self._custom_exclude,
                     }
                     for m in self._models
                 ],
@@ -309,6 +339,147 @@ class ModelManager:
             logger.error(f"加载模型缓存失败: {e}")
 
         return False
+
+    # ── 自定义添加/屏蔽 ──────────────────────────────────────
+
+    def add_custom_model(self, model_id: str, param_b: float = 0) -> dict:
+        """
+        手动添加一个模型到可用列表。
+        如果模型已在列表中，返回提示；否则添加到 _custom_include 并持久化。
+        """
+        with self._lock:
+            # 检查是否已存在
+            existing_ids = {m["id"] for m in self._models}
+            if model_id in existing_ids:
+                return {"message": f"模型 {model_id} 已在列表中", "already_exists": True}
+
+            # 检查是否在自定义屏蔽中
+            if model_id in self._custom_exclude:
+                return {"message": f"模型 {model_id} 在屏蔽列表中，请先解除屏蔽", "blocked": True}
+
+            # 如果未提供参数量，尝试解析
+            if param_b <= 0:
+                from model_fetcher import parse_param_size, fetch_model_detail, estimate_param_from_storage
+                param_b = parse_param_size(model_id)
+                if param_b == 0:
+                    detail = fetch_model_detail(model_id)
+                    if detail:
+                        ss = detail.get("StorageSize", 0)
+                        if ss:
+                            param_b = estimate_param_from_storage(ss)
+                if param_b == 0:
+                    param_b = 100.0  # 兜底默认值
+
+            model = {"id": model_id, "param_b": param_b}
+            self._custom_include.append(model)
+            self._models.append(model)
+
+            # 重新排序
+            self._models.sort(key=lambda x: x["param_b"], reverse=True)
+            self._save_cache()
+            self._save_custom()
+
+        logger.info(f"管理员手动添加模型: {model_id} ({param_b}B)")
+        return {"message": f"模型 {model_id} ({param_b}B) 已添加", "already_exists": False}
+
+    def block_model(self, model_id: str) -> dict:
+        """
+        手动屏蔽一个模型（从可用列表中永久移除，直到解除屏蔽）。
+        """
+        with self._lock:
+            # 检查是否已屏蔽
+            if model_id in self._custom_exclude:
+                return {"message": f"模型 {model_id} 已在屏蔽列表中", "already_blocked": True}
+
+            self._custom_exclude.add(model_id)
+
+            # 从可用列表中移除
+            self._models = [m for m in self._models if m["id"] != model_id]
+            # 如果是自定义添加的，也移除
+            self._custom_include = [m for m in self._custom_include if m["id"] != model_id]
+            # 清理禁用/冷却状态
+            self._disabled.pop(model_id, None)
+            self._cooldown.pop(model_id, None)
+            self._429_count.pop(model_id, None)
+
+            self._current_index = 0
+            self._save_cache()
+            self._save_custom()
+
+        logger.info(f"管理员手动屏蔽模型: {model_id}")
+        return {"message": f"模型 {model_id} 已屏蔽", "already_blocked": False}
+
+    def unblock_model(self, model_id: str) -> dict:
+        """
+        解除屏蔽一个模型，需要刷新模型列表才能重新加入。
+        """
+        with self._lock:
+            if model_id not in self._custom_exclude:
+                return {"message": f"模型 {model_id} 不在屏蔽列表中", "not_blocked": True}
+
+            self._custom_exclude.discard(model_id)
+            self._save_custom()
+
+        # 需要刷新才能重新拉取被屏蔽的模型
+        logger.info(f"管理员解除屏蔽模型: {model_id}，需要刷新模型列表才能生效")
+        return {"message": f"模型 {model_id} 已解除屏蔽，请刷新模型列表生效", "not_blocked": False}
+
+    def remove_custom_model(self, model_id: str) -> dict:
+        """
+        移除手动添加的模型。
+        """
+        with self._lock:
+            # 检查是否在自定义添加列表中
+            custom_ids = [m["id"] for m in self._custom_include]
+            if model_id not in custom_ids:
+                return {"message": f"模型 {model_id} 不是手动添加的", "not_custom": True}
+
+            self._custom_include = [m for m in self._custom_include if m["id"] != model_id]
+            self._models = [m for m in self._models if m["id"] != model_id]
+
+            self._current_index = 0
+            self._save_cache()
+            self._save_custom()
+
+        logger.info(f"管理员移除手动添加的模型: {model_id}")
+        return {"message": f"模型 {model_id} 已移除", "not_custom": False}
+
+    def get_custom_models(self) -> dict:
+        """获取自定义添加和屏蔽的模型列表"""
+        with self._lock:
+            return {
+                "custom_include": list(self._custom_include),
+                "custom_exclude": list(self._custom_exclude),
+            }
+
+    def _load_custom(self):
+        """从本地文件加载自定义添加/屏蔽的模型"""
+        if not self._custom_file.exists():
+            return
+
+        try:
+            data = json.loads(self._custom_file.read_text(encoding="utf-8"))
+            with self._lock:
+                self._custom_include = data.get("custom_include", [])
+                self._custom_exclude = set(data.get("custom_exclude", []))
+            logger.info(f"加载自定义模型配置: {len(self._custom_include)} 个添加, {len(self._custom_exclude)} 个屏蔽")
+        except Exception as e:
+            logger.error(f"加载自定义模型配置失败: {e}")
+
+    def _save_custom(self):
+        """将自定义添加/屏蔽的模型保存到本地文件"""
+        try:
+            data = {
+                "custom_include": self._custom_include,
+                "custom_exclude": list(self._custom_exclude),
+            }
+            self._custom_file.parent.mkdir(parents=True, exist_ok=True)
+            self._custom_file.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.error(f"保存自定义模型配置失败: {e}")
 
 
 # 全局单例
